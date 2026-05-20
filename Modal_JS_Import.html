@@ -374,6 +374,31 @@
         font-family: var(--mono);
         margin-left: 4px;
     }
+
+    .im-target-card {
+        margin-top: 8px;
+        padding: 9px 10px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--blue);
+        border-radius: 0 8px 8px 0;
+    }
+
+    .im-target-title {
+        font-size: 9px;
+        font-weight: 800;
+        color: var(--t3);
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        margin-bottom: 4px;
+    }
+
+    .im-target-sheet {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--t1);
+        line-height: 1.25;
+    }
 </style>
 
 <script>
@@ -381,48 +406,21 @@
      * 📥 MODUL IMPORT — NÁVRAT K PŮVODNÍMU VZHLEDU + NOVÝ STABILNÍ MOTOR
      */
     (function () {
-        if (!S._impSlots) S._impSlots = [{}, {}, {}];
-        if (!S._impMode) S._impMode = 'sheet';
-
-        // Konfigurace slotů — ikona, číslo a popis pro každý slot
         var SLOT_CONFIGS = [
-            { num: 1, icon: '💰', label: 'Pokladní data' },
-            { num: 2, icon: '📊', label: 'MIS prodej' },
-            { num: 3, icon: '📋', label: 'FA' }
+            { num: 1, icon: '📡', label: 'Telex', target: 'Telex' },
+            { num: 2, icon: 'Σ', label: 'Odpisy celkem', target: 'Odpisy celkem v CZK' },
+            { num: 3, icon: '🏷️', label: 'Odpisy po artiklech', target: 'Odpisy Akční artikly v CZK' }
         ];
 
-        // Full-width toggle row with label + description text
-        function imTgl(id, label, desc, on) {
-            return '<div class="im-tgl" onclick="tglClick(document.getElementById(\'' + id + '\'))">' +
-                '<div class="im-tgl-info">' +
-                '<span class="im-tgl-label">' + label + '</span>' +
-                (desc ? '<span class="im-tgl-desc">' + desc + '</span>' : '') +
-                '</div>' +
-                '<div class="tgl-track' + (on ? ' on' : '') + '" id="' + id + '"></div>' +
-                '</div>';
+        if (!S._impSlots || S._impSlots.length !== SLOT_CONFIGS.length) S._impSlots = emptySlots();
+
+        function emptySlots() {
+            return SLOT_CONFIGS.map(function () { return {}; });
         }
 
         window.vImport = function (m) {
             var slots = S._impSlots;
-            var sheets = S.data.sheets || [];
-
-            // ── Mode switcher (tab bar) ──
-            var html = '<div class="im-mode-grid">' +
-                '<div class="im-mode-card' + (S._impMode === 'sheet' ? ' active' : '') + '" onclick="imSetMode(\'sheet\')">' +
-                '<div class="im-mode-icon">📥</div>' +
-                '<div class="im-mode-body">' +
-                '<span class="im-mode-title">Sheet Import</span>' +
-                '<span class="im-mode-sub">Data ze souborů do aktivní tabulky</span>' +
-                '</div>' +
-                '</div>' +
-                '<div class="im-mode-card' + (S._impMode === 'drive' ? ' active' : '') + '" onclick="imSetMode(\'drive\')">' +
-                '<div class="im-mode-icon">📁</div>' +
-                '<div class="im-mode-body">' +
-                '<span class="im-mode-title">Drive Import</span>' +
-                '<span class="im-mode-sub">Kopírování souborů do Google Drive složky</span>' +
-                '</div>' +
-                '</div>' +
-                '</div>';
+            var html = '';
 
             // ── File slots ──
             html += '<div class="im-slots">';
@@ -455,7 +453,7 @@
                     html += '<div class="im-slot-link">Vybrat soubor</div>';
                 }
 
-                html += '<input type="file" id="fi' + i + '" hidden onchange="imHandleFile(this,' + i + ')">';
+                html += '<input type="file" id="fi' + i + '" accept=".xlsx,.csv" hidden onchange="imHandleFile(this,' + i + ')">';
                 html += '</div>';
 
                 // Vždy rezervovat místo pro výběr listu — zabrání posunu layoutu
@@ -471,50 +469,12 @@
                 }
                 html += '</div>';
 
+                html += '<div class="im-target-card">' +
+                    '<div class="im-target-title">Cíl</div>' +
+                    '<div class="im-target-sheet">' + esc(cfg.target) + '</div>' +
+                    '</div>';
+
                 html += '</div>';
-            }
-            html += '</div>';
-
-            // ── Config section ──
-            html += '<div class="im-config-grid" style="grid-template-columns:1fr 1fr">';
-            if (S._impMode === 'sheet') {
-                var firstSheet = sheets.length > 0 ? sheets[0].name : "";
-                var selectedSheet = S._impTargetSheet || firstSheet;
-                if (!S._impTargetSheet) S._impTargetSheet = selectedSheet;
-
-                var sheetCountHint = sheets.length > 0
-                    ? '<span class="im-sheet-count">(' + sheets.length + ')</span>'
-                    : '';
-
-                html += '<div class="im-config-card"><div class="im-config-hd"><span class="im-config-icon">🎯</span><span class="im-config-title">Cíl</span></div>' +
-                    '<div class="fg">' +
-                    '<div class="fg-label">Cílový list ' + sheetCountHint + '</div>' +
-                    '<select class="fg-input" id="fImpSheet">' +
-                    sheets.map(function (sh) {
-                        return '<option value="' + esc(sh.name) + '"' + (sh.name === selectedSheet ? ' selected' : '') + '>' + esc(sh.name) + '</option>';
-                    }).join('') +
-                    '<option value="__new__"' + (selectedSheet === '__new__' ? ' selected' : '') + '>+ Nový list...</option>' +
-                    '</select>' +
-                    '</div>' +
-                    '<div id="fImpNewWrap" style="margin-top:10px">' +
-                    fg('Název nového listu', '<input type="text" class="fg-input" id="fImpNew" value="' + esc(S._impNewSheetName || '') + '" ' + (selectedSheet === '__new__' ? '' : 'disabled') + '>') +
-                    '</div></div>';
-
-                html += '<div class="im-config-card"><div class="im-config-hd"><span class="im-config-icon">⚙️</span><span class="im-config-title">Parametry importu</span></div>' +
-                    imTgl('fImpClear', 'Přepsat data', 'Vymaže obsah listu před zápisem', true) +
-                    imTgl('fImpHeader', 'Záhlaví (1. řádek)', 'Tučné formátování prvního řádku', true) +
-                    imTgl('fImpSkipEmpty', 'Přeskočit prázdné řádky', 'Filtruje řádky bez hodnot', true) +
-                    imTgl('fImpTrimCols', 'Oříznout prázdné sloupce', 'Odstraní prázdné sloupce na konci', false) +
-                    '</div>';
-            } else {
-                html += '<div class="im-config-card"><div class="im-config-hd"><span class="im-config-icon">📂</span><span class="im-config-title">Cílová složka</span></div>' +
-                    fg('ID nebo URL složky', '<input type="text" class="fg-input" id="fImpFolder" placeholder="Vložte ID složky z Google Drive">') +
-                    '<div class="fg-hint">Prázdné = kořenová složka Drive</div>' +
-                    '</div>';
-                html += '<div class="im-config-card"><div class="im-config-hd"><span class="im-config-icon">🏷️</span><span class="im-config-title">Pojmenování souborů</span></div>' +
-                    fg('Prefix názvu', '<input type="text" class="fg-input" id="fImpPrefix" placeholder="Např. Import_">') +
-                    '<div class="fg-hint">Přidá se před původní název souboru</div>' +
-                    '</div>';
             }
             html += '</div>';
 
@@ -526,26 +486,10 @@
                     '<button class="btn btn-s" onclick="go(\'home\')">Zrušit</button>';
             }
 
-            var sel = document.getElementById('fImpSheet');
-            if (sel) {
-                sel.onchange = function () {
-                    S._impTargetSheet = this.value;
-                    var inp = document.getElementById('fImpNew');
-                    if (this.value === '__new__') inp.disabled = false;
-                    else inp.disabled = true;
-                };
-            }
-            var inpNew = document.getElementById('fImpNew');
-            if (inpNew) {
-                inpNew.oninput = function () { S._impNewSheetName = this.value; };
-            }
         };
 
-        window.imSetMode = function (m) { S._impMode = m; render(); };
         window.imClearSlot = function (i) {
             S._impSlots[i] = {};
-            var any = S._impSlots.some(function (s) { return s.name; });
-            if (!any) S._impNewSheetName = '';
             render();
         };
         window.imDrag = function (e, over, i) {
@@ -566,6 +510,11 @@
         };
 
         async function imProcessFile(file, i) {
+            if (!/\.(xlsx|csv)$/i.test(file.name)) {
+                alert('Podporované formáty jsou pouze XLSX a CSV.');
+                return;
+            }
+
             S._impSlots[i] = { file: file, name: file.name, status: 'loading' };
             setLoading(true, 'Načítám listy...', file.name);
             render();
@@ -576,11 +525,6 @@
                 S._impSlots[i].sheetNames = workbook.SheetNames;
                 S._impSlots[i].sheetIdx = 0;
                 S._impSlots[i].status = 'ok';
-
-                var baseName = file.name.split('.')[0].replace(/\s+/g, '_');
-                if (!S._impNewSheetName || S._impNewSheetName === '') {
-                    S._impNewSheetName = baseName;
-                }
             } catch (e) {
                 S._impSlots[i].status = 'ok'; // Fallback
                 console.error('Chyba při parsování struktury:', e);
@@ -600,25 +544,17 @@
 
         window.execImport = async function () {
             if (S.busy) return;
-            var queue = S._impSlots.filter(s => s.file);
+            var queue = S._impSlots
+                .map(function (slot, idx) { return { slot: slot, config: SLOT_CONFIGS[idx] }; })
+                .filter(function (job) { return job.slot.file; });
             if (queue.length === 0) { alert('Vyberte alespoň jeden soubor.'); return; }
-
-            var mode = S._impMode;
-            var targetSheet = "";
-            if (mode === 'sheet') {
-                var sel = document.getElementById('fImpSheet').value;
-                targetSheet = sel === '__new__' ? document.getElementById('fImpNew').value.trim() : sel;
-                targetSheet = targetSheet.replace(/[:\\/?*\[\]]/g, "_").substring(0, 31);
-                if (!targetSheet) { alert('Zadejte název cílového listu.'); return; }
-            }
 
             var startTime = performance.now();
             AppLogger.info('🚀 Start importu: ' + queue.length + ' souborů.');
 
             setBusy(true);
             try {
-                if (mode === 'sheet') await runSheetImport(queue, targetSheet, startTime);
-                else await runDriveImport(queue);
+                await runSheetImport(queue, startTime);
             } catch (err) {
                 showResult('Chyba importu', 'Proces byl přerušen:<br>' + esc(err.message), '❌');
             } finally {
@@ -627,18 +563,20 @@
             }
         };
 
-        async function runSheetImport(queue, targetSheet, startTime) {
-            var overwrite = isOn('fImpClear');
-            var formatHeader = isOn('fImpHeader');
-            var skipEmptyRows = isOn('fImpSkipEmpty');
-            var trimEmptyCols = isOn('fImpTrimCols');
+        async function runSheetImport(queue, startTime) {
+            var overwrite = true;
+            var formatHeader = true;
+            var skipEmptyRows = true;
+            var trimEmptyCols = false;
             var totalRows = 0;
-            var nextStartRow = 1;
+            var importedTargets = [];
 
             for (var i = 0; i < queue.length; i++) {
-                var slot = queue[i];
+                var slot = queue[i].slot;
+                var targetSheet = queue[i].config.target;
                 var file = slot.file;
                 var sourceSheetIdx = slot.sheetIdx || 0;
+                var nextStartRow = 1;
 
                 setLoading(true, 'Parsuji...', file.name);
                 var workbook = await readWorkbook(file);
@@ -662,6 +600,7 @@
                 }
 
                 if (!data || data.length === 0) continue;
+                importedTargets.push(targetSheet);
 
                 var chunkSize = 5000;
                 var chunks = [];
@@ -673,10 +612,9 @@
                 var firstRaw = chunks.shift();
                 var firstClean = cleanData(firstRaw);
                 var res = await callServer('moduleImport_chunk', [JSON.stringify(firstClean), targetSheet, {
-                    isFirstChunk: (i === 0),
+                    isFirstChunk: true,
                     overwrite: overwrite,
                     formatHeader: formatHeader,
-                    startRow: (i === 0) ? undefined : nextStartRow,
                     totalRows: data.length
                 }]);
 
@@ -696,7 +634,9 @@
                         totalRows += cData.length;
                     }
 
-                    setProgress(Math.round(((k + 1) / chunks.length) * 100), 'Zápis: ' + file.name + ' (' + totalRows + '/' + data.length + ')');
+                    var filePct = chunks.length ? Math.round(((k + 1) / chunks.length) * 100) : 100;
+                    var totalPct = Math.round(((i + (filePct / 100)) / queue.length) * 100);
+                    setProgress(totalPct, 'Zápis: ' + file.name + ' → ' + targetSheet);
                     var results = await Promise.all(batchTasks.map(t => callServer('moduleImport_chunk', [JSON.stringify(t.data), targetSheet, { isFirstChunk: false, startRow: t.row }])));
                     results.forEach(r => { if (!r.success) throw new Error(r.error); });
                 }
@@ -749,32 +689,36 @@
             var duration = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
             AppLogger.ok('🚀 Import dokončen za ' + duration + '.');
 
-            S._impSlots = [{}, {}, {}]; S._impNewSheetName = ''; render();
+            S._impSlots = emptySlots(); render();
 
             setTimeout(() => {
                 showResult('Import dokončen',
-                    '✅ Data nahrána do <strong>' + esc(targetSheet) + '</strong>.<br>' +
+                    '✅ Data nahrána do listů: <strong>' + esc(importedTargets.join(', ')) + '</strong>.<br>' +
                     'Celkem: <strong>' + totalRows + '</strong> řádků.<br>' +
                     'Čas: <strong>' + duration + '</strong>', '✅');
             }, 200);
         }
 
-        async function runDriveImport(queue) {
-            var folderId = document.getElementById('fImpFolder').value.trim();
-            var prefix = document.getElementById('fImpPrefix').value.trim();
-            var count = 0;
-            for (var i = 0; i < queue.length; i++) {
-                setProgress(Math.round((i / queue.length) * 100), 'Nahrávám: ' + queue[i].name);
-                var dataUrl = await readFileAsDataURL(queue[i].file);
-                var res = await callServer('moduleImport_uploadToDrive', [{ data: dataUrl, name: queue[i].name }, { targetFolderId: folderId, prefix: prefix }]);
-                if (res.success) count++; else throw new Error(res.error);
-            }
-            S._impSlots = [{}, {}, {}]; render();
-            showResult('Nahrávání dokončeno', '✅ Celkem nahráno: <strong>' + count + '</strong> souborů.', '📁');
+        function readWorkbook(file) {
+            return new Promise((resolve, reject) => {
+                var r = new FileReader();
+                r.onload = e => {
+                    try {
+                        if (/\.csv$/i.test(file.name)) {
+                            resolve(XLSX.read(e.target.result, { type: 'string', cellDates: true }));
+                        } else {
+                            var d = new Uint8Array(e.target.result);
+                            resolve(XLSX.read(d, { type: 'array', cellDates: true }));
+                        }
+                    } catch (ex) {
+                        reject(ex);
+                    }
+                };
+                r.onerror = reject;
+                if (/\.csv$/i.test(file.name)) r.readAsText(file, 'UTF-8');
+                else r.readAsArrayBuffer(file);
+            });
         }
-
-        function readWorkbook(file) { return new Promise((resolve, reject) => { var r = new FileReader(); r.onload = e => { try { var d = new Uint8Array(e.target.result); resolve(XLSX.read(d, { type: 'array', cellDates: true })); } catch (ex) { reject(ex); } }; r.onerror = reject; r.readAsArrayBuffer(file); }); }
-        function readFileAsDataURL(file) { return new Promise((resolve, reject) => { var r = new FileReader(); r.onload = e => resolve(e.target.result); r.onerror = reject; r.readAsDataURL(file); }); }
         function callServer(f, a) { return new Promise((resolve, reject) => { google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[f].apply(this, a); }); }
         function render() { var m = document.getElementById('main'); if (S.mod === 'import') vImport(m); }
     })();

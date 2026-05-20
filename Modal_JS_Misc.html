@@ -51,9 +51,6 @@
                 var entries = d.entries || [];
                 var vStr = d.version || S.data.version || '?';
 
-                // Synchronizace verze v hlavičce aplikace
-                var verEl = document.getElementById('ver');
-                if (verEl) verEl.textContent = 'v' + vStr;
                 S.data.version = vStr; // Aktualizace globálního stavu v klientovi
 
                 var html = '<div class="cl-head"><div class="cl-ver">v' + esc(vStr) + '</div>' +
@@ -101,8 +98,6 @@
             .withSuccessHandler(function (r) {
                 setBusy(false);
                 if (r.success) {
-                    var headerVerEl = document.getElementById('ver');
-                    if (headerVerEl) headerVerEl.textContent = 'v' + r.newVersion;
                     vChangelog(document.getElementById('main'));
                 }
             })
