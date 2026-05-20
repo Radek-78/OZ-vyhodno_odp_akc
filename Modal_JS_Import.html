@@ -580,6 +580,7 @@
                 var targetSheet = queue[i].slot.targetSheet || queue[i].config.target;
                 var file = slot.file;
                 var sourceSheetIdx = slot.sheetIdx || 0;
+                var replaceDashWithZero = queue[i].config.num === 2 || queue[i].config.num === 3;
                 var nextStartRow = 1;
 
                 setLoading(true, 'Parsuji...', file.name);
@@ -614,7 +615,7 @@
 
                 // 1. Sekvenční start (kvůli inicializaci listu na serveru)
                 var firstRaw = chunks.shift();
-                var firstClean = cleanData(firstRaw);
+                var firstClean = cleanData(firstRaw, replaceDashWithZero);
                 var res = await callServer('moduleImport_chunk', [JSON.stringify(firstClean), targetSheet, {
                     isFirstChunk: true,
                     overwrite: overwrite,
@@ -632,7 +633,7 @@
                     var batch = chunks.slice(k, k + workerLimit);
                     var batchTasks = [];
                     for (var b = 0; b < batch.length; b++) {
-                        var cData = cleanData(batch[b]);
+                        var cData = cleanData(batch[b], replaceDashWithZero);
                         batchTasks.push({ data: cData, row: nextStartRow });
                         nextStartRow += cData.length;
                         totalRows += cData.length;
@@ -646,7 +647,7 @@
                 }
             }
 
-            function cleanData(raw) {
+            function cleanData(raw, replaceDashWithZero) {
                 var cleaned = [];
                 for (var r = 0; r < raw.length; r++) {
                     var row = raw[r];
@@ -655,6 +656,7 @@
                     for (var c = 0; c < row.length; c++) {
                         var v = row[c];
                         if (v && typeof v === 'object' && 'v' in v && !(v instanceof Date)) v = v.v;
+                        if (replaceDashWithZero && typeof v === 'string' && v.trim() === '--') v = 0;
                         if (v === undefined || v === null) cRow.push("");
                         else if (typeof v === 'string') {
                             cRow.push((v.indexOf('\x00') !== -1 || v.length > 500) ? v.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim() : v);
