@@ -42,6 +42,7 @@ function buildMenu_(name) {
     .addSeparator()
     .addItem('📅 Nový KT soubor', 'showModuleKT')
     .addItem('📥 Import souborů', 'showModuleImport')
+    .addItem('🎨 Obarvit řádky podle manažerů', 'runManagerRowColoring')
     .addItem('📄 Generování PDF', 'showModulePDF')
     .addSeparator()
     .addItem('⚙️ Nastavení', 'showModuleSettings')
