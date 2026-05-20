@@ -44,7 +44,7 @@ function buildMenu_(name) {
     .addItem('📥 Import souborů', 'showModuleImport')
     .addItem('📄 Generování PDF', 'showModulePDF')
     .addSeparator()
-    .addItem('🎨 Obarvit skupiny RM', 'runManagerRowColoring')
+    .addItem('🔄 Aktualizovat RM+VT', 'showRmVtModal')
     .addSeparator()
     .addItem('⚙️ Nastavení', 'showModuleSettings')
     .addSeparator()

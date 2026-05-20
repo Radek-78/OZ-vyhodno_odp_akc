@@ -10,6 +10,8 @@ const ModuleManagerColoring = {
   START_ROW: 10,
   MANAGER_COL: 4,
   LAST_ROW_MARKER_COL: 2,
+  COLOR_START_COL: 2,
+  COLOR_END_COL: 13,
   STRIPE_COLOR: '#D9E1F2',
   CLEAR_COLOR: '#ffffff',
 
@@ -36,7 +38,7 @@ const ModuleManagerColoring = {
       }
 
       const rowCount = lastRow - ModuleManagerColoring.START_ROW + 1;
-      const lastCol = Math.max(sheet.getLastColumn(), ModuleManagerColoring.MANAGER_COL);
+      const colorColCount = ModuleManagerColoring.COLOR_END_COL - ModuleManagerColoring.COLOR_START_COL + 1;
       const managers = sheet
         .getRange(ModuleManagerColoring.START_ROW, ModuleManagerColoring.MANAGER_COL, rowCount, 1)
         .getDisplayValues()
@@ -53,11 +55,11 @@ const ModuleManagerColoring = {
         if (manager) previousManager = manager;
 
         const color = useStripe ? ModuleManagerColoring.STRIPE_COLOR : ModuleManagerColoring.CLEAR_COLOR;
-        backgrounds.push(Array(lastCol).fill(color));
+        backgrounds.push(Array(colorColCount).fill(color));
       });
 
       sheet
-        .getRange(ModuleManagerColoring.START_ROW, 1, rowCount, lastCol)
+        .getRange(ModuleManagerColoring.START_ROW, ModuleManagerColoring.COLOR_START_COL, rowCount, colorColCount)
         .setBackgrounds(backgrounds);
 
       results.push({ sheet: name, rows: rowCount, lastRow: lastRow, message: 'hotovo' });
