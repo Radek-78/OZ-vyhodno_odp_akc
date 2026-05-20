@@ -281,7 +281,7 @@
       if (!items.length) return html + '<div class="rmvt-empty">Žádné listy k obarvení.</div></div>';
       items.forEach(function (x) {
         html += '<div class="rmvt-row"><span class="rmvt-branch">' + esc(x.sheet) + '</span><span class="rmvt-type">B:M</span><span class="rmvt-change">' +
-          esc(x.message) + (x.rows ? ', ' + esc(x.rows) + ' řádků' : '') + '</span></div>';
+          esc(x.message) + (x.rows ? ', ' + esc(x.rows) + ' řádků' : '') + (x.hiddenRows ? ', skryto ' + esc(x.hiddenRows) + ' prázdných řádků' : '') + '</span></div>';
       });
       return html + '</div>';
     }

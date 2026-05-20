@@ -50,6 +50,8 @@ const ModuleRmVt = {
 
     ModuleRmVt.saveFolder(folderId);
 
+    ModuleManagerColoring.refreshRows();
+
     const sourceFile = ModuleRmVt.findSourceFile_(folderId);
     const sourceData = ModuleRmVt.readSourceData_(sourceFile);
     const localData = ModuleRmVt.readLocalData_();

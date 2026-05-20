@@ -8,6 +8,7 @@
 const ModuleManagerColoring = {
   SHEET_NAMES: ['BNL', 'OLO', 'CER', 'BUS', 'BRV'],
   START_ROW: 10,
+  END_ROW: 99,
   MANAGER_COL: 4,
   LAST_ROW_MARKER_COL: 2,
   COLOR_START_COL: 2,
@@ -31,9 +32,10 @@ const ModuleManagerColoring = {
         return;
       }
 
+      const hiddenRows = ModuleManagerColoring.refreshBranchRows_(sheet);
       const lastRow = ModuleManagerColoring.findLastNumericRow_(sheet);
       if (lastRow < ModuleManagerColoring.START_ROW) {
-        results.push({ sheet: name, rows: 0, message: 'bez dat od řádku 10' });
+        results.push({ sheet: name, rows: 0, hiddenRows: hiddenRows, message: 'bez dat od řádku 10' });
         return;
       }
 
@@ -62,10 +64,32 @@ const ModuleManagerColoring = {
         .getRange(ModuleManagerColoring.START_ROW, ModuleManagerColoring.COLOR_START_COL, rowCount, colorColCount)
         .setBackgrounds(backgrounds);
 
-      results.push({ sheet: name, rows: rowCount, lastRow: lastRow, message: 'hotovo' });
+      results.push({ sheet: name, rows: rowCount, hiddenRows: hiddenRows, lastRow: lastRow, message: 'hotovo' });
     });
 
     return { success: true, results: results };
+  },
+
+  /**
+   * Pouze obnoví viditelnost řádků 10:99 podle prázdnosti sloupce B.
+   * @returns {Array<{sheet: string, hiddenRows: number, message: string}>}
+   */
+  refreshRows() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const results = [];
+
+    ModuleManagerColoring.SHEET_NAMES.forEach(name => {
+      const sheet = ss.getSheetByName(name);
+      if (!sheet) {
+        results.push({ sheet: name, hiddenRows: 0, message: 'list nenalezen' });
+        return;
+      }
+
+      const hiddenRows = ModuleManagerColoring.refreshBranchRows_(sheet);
+      results.push({ sheet: name, hiddenRows: hiddenRows, message: 'hotovo' });
+    });
+
+    return results;
   },
 
   /**
@@ -74,7 +98,7 @@ const ModuleManagerColoring = {
    * @returns {number}
    */
   findLastNumericRow_(sheet) {
-    const maxRow = sheet.getLastRow();
+    const maxRow = Math.min(sheet.getLastRow(), ModuleManagerColoring.END_ROW);
     if (maxRow < ModuleManagerColoring.START_ROW) return 0;
 
     const rowCount = maxRow - ModuleManagerColoring.START_ROW + 1;
@@ -88,6 +112,50 @@ const ModuleManagerColoring = {
       }
     }
     return 0;
+  },
+
+  /**
+   * V rozsahu 10:99 odkryje všechny řádky a poté skryje řádky s prázdným sloupcem B.
+   * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+   * @returns {number}
+   */
+  refreshBranchRows_(sheet) {
+    const maxRow = Math.min(sheet.getMaxRows(), ModuleManagerColoring.END_ROW);
+    if (maxRow < ModuleManagerColoring.START_ROW) return 0;
+
+    const rowCount = maxRow - ModuleManagerColoring.START_ROW + 1;
+    sheet.showRows(ModuleManagerColoring.START_ROW, rowCount);
+
+    const values = sheet
+      .getRange(ModuleManagerColoring.START_ROW, ModuleManagerColoring.LAST_ROW_MARKER_COL, rowCount, 1)
+      .getDisplayValues()
+      .map(row => String(row[0] || '').trim());
+
+    let hidden = 0;
+    let start = null;
+    let length = 0;
+
+    function flush() {
+      if (start !== null && length > 0) {
+        sheet.hideRows(start, length);
+        hidden += length;
+      }
+      start = null;
+      length = 0;
+    }
+
+    values.forEach((value, idx) => {
+      const row = ModuleManagerColoring.START_ROW + idx;
+      if (!value) {
+        if (start === null) start = row;
+        length++;
+      } else {
+        flush();
+      }
+    });
+    flush();
+
+    return hidden;
   },
 
   /**
@@ -110,8 +178,9 @@ function runManagerRowColoring() {
   try {
     const result = ModuleManagerColoring.run();
     const lines = result.results.map(r => {
-      if (r.rows > 0) return r.sheet + ': ' + r.rows + ' řádků (do řádku ' + r.lastRow + ')';
-      return r.sheet + ': ' + r.message;
+      const hiddenInfo = r.hiddenRows ? ', skryto ' + r.hiddenRows + ' prázdných řádků' : '';
+      if (r.rows > 0) return r.sheet + ': ' + r.rows + ' řádků (do řádku ' + r.lastRow + ')' + hiddenInfo;
+      return r.sheet + ': ' + r.message + hiddenInfo;
     });
 
     SpreadsheetApp.getActiveSpreadsheet().toast('Obarvení skupin RM dokončeno', 'Hotovo', 5);
