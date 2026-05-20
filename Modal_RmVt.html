@@ -13,7 +13,7 @@
 
     .rmvt-wrap {
       display: grid;
-      grid-template-columns: minmax(280px, 360px) 1fr;
+      grid-template-columns: minmax(360px, 520px) 1fr;
       gap: 14px;
       height: 100%;
       min-height: 0;
@@ -40,7 +40,7 @@
       min-height: 0;
     }
 
-    .rmvt-result {
+    .rmvt-progress-card {
       overflow: auto;
       min-height: 0;
       font-size: 12px;
@@ -177,8 +177,9 @@
           </div>
         </div>
 
-        <div class="rmvt-card rmvt-result" id="resultBox">
-          <div class="rmvt-empty">Připraveno ke kontrole.</div>
+        <div class="rmvt-card rmvt-progress-card" id="progressBox">
+          <div class="rmvt-card-title">Průběh aktualizace</div>
+          <div class="rmvt-empty">Výsledky se po dokončení otevřou v samostatném okně.</div>
         </div>
       </div>
     </div>
@@ -264,67 +265,19 @@
 
     function runUpdate() {
       var folderId = document.getElementById('folderId').value.trim();
-      document.getElementById('resultBox').innerHTML = '<div class="rmvt-empty">Probíhá porovnání a aktualizace...</div>';
+      document.getElementById('progressBox').innerHTML = '<div class="rmvt-card-title">Průběh aktualizace</div><div class="rmvt-empty">Probíhá porovnání, aktualizace a obarvení. Výsledek se otevře v samostatném okně.</div>';
       setBusy(true, 'Porovnávám data...', 35);
       log('Spouštím aktualizaci RM+VT...');
 
       google.script.run
         .withSuccessHandler(function (r) {
           setBusy(false, 'Hotovo', 100);
-          renderResult(r);
+          document.getElementById('progressBox').innerHTML = '<div class="rmvt-card-title">Dokončeno</div><div class="rmvt-empty">Aktualizace dokončena. Výsledky byly otevřeny v samostatném okně.</div>';
           log('Aktualizace dokončena.', 'ok');
           setTimeout(function () { setProgress(0, ''); }, 1000);
         })
         .withFailureHandler(showError)
         .moduleRmVt_run(folderId);
-    }
-
-    function renderResult(r) {
-      var s = r.summary || {};
-      var html = '<div class="rmvt-card-title">Výsledek</div>';
-      html += '<div class="fg-hint" style="margin-bottom:10px">Zdroj: <strong>' + esc(r.sourceFile.name) + '</strong></div>';
-      html += '<div class="rmvt-kpis">' +
-        kpi('Lokálně', s.localBranches || 0) +
-        kpi('Zdroj', s.sourceBranches || 0) +
-        kpi('Upraveno', s.updatedRows || 0) +
-        kpi('LC změny', s.lcChanges || 0) +
-        kpi('RM změny', s.rmChanges || 0) +
-        kpi('VT změny', s.vtChanges || 0) +
-        '</div>';
-
-      if (r.lcCounts && r.lcCounts.length) {
-        html += '<div class="rmvt-list"><div class="rmvt-card-title">Změny počtu filiálek podle LC</div>';
-        r.lcCounts.forEach(function (x) {
-          html += '<div class="rmvt-row"><span class="rmvt-branch">' + esc(x.lc) + '</span><span class="rmvt-type">počet</span><span class="rmvt-change">' +
-            esc(x.local) + ' → ' + esc(x.source) + ' (' + (x.delta > 0 ? '+' : '') + esc(x.delta) + ')</span></div>';
-        });
-        html += '</div>';
-      }
-
-      html += '<div class="rmvt-list"><div class="rmvt-card-title">Změny</div>';
-      var changes = r.changes || [];
-      if (!changes.length) {
-        html += '<div class="rmvt-empty">Žádné rozdíly nebyly nalezeny.</div>';
-      } else {
-        changes.slice(0, 250).forEach(function (ch) {
-          html += '<div class="rmvt-row"><span class="rmvt-branch">' + esc(ch.branchId) + '</span><span class="rmvt-type">' + esc(ch.type) + '</span><span class="rmvt-change">' +
-            (ch.message ? esc(ch.message) : esc(ch.from) + ' → ' + esc(ch.to)) + '</span></div>';
-        });
-        if (changes.length > 250) html += '<div class="fg-hint">Zobrazeno prvních 250 změn z ' + esc(changes.length) + '.</div>';
-      }
-      html += '</div>';
-
-      html += '<div class="rmvt-list"><div class="rmvt-card-title">Obarvení skupin RM</div>';
-      (r.coloring || []).forEach(function (x) {
-        html += '<div class="rmvt-row"><span class="rmvt-branch">' + esc(x.sheet) + '</span><span class="rmvt-type">B:M</span><span class="rmvt-change">' + esc(x.message) + (x.rows ? ', ' + esc(x.rows) + ' řádků' : '') + '</span></div>';
-      });
-      html += '</div>';
-
-      document.getElementById('resultBox').innerHTML = html;
-    }
-
-    function kpi(label, value) {
-      return '<div class="rmvt-kpi"><div class="rmvt-kpi-label">' + esc(label) + '</div><div class="rmvt-kpi-value">' + esc(value) + '</div></div>';
     }
 
     function showError(e) {
@@ -333,7 +286,7 @@
       document.getElementById('sTxt').textContent = 'Chyba';
       var msg = e && e.message ? e.message : String(e);
       log(msg, 'error');
-      document.getElementById('resultBox').innerHTML = '<div class="rmvt-empty" style="color:var(--red)">' + esc(msg) + '</div>';
+      document.getElementById('progressBox').innerHTML = '<div class="rmvt-card-title">Chyba</div><div class="rmvt-empty" style="color:var(--red)">' + esc(msg) + '</div>';
     }
 
     document.addEventListener('DOMContentLoaded', init);

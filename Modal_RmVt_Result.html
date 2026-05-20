@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="cs">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <?!= include('Modal_CSS'); ?>
+  <style>
+    #app {
+      grid-template-columns: 300px 1fr;
+      grid-template-rows: 60px 1fr 48px;
+    }
+
+    .rmvt-result-wrap {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 12px;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .rmvt-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+
+    .rmvt-card-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--t1);
+      margin-bottom: 10px;
+    }
+
+    .rmvt-kpis {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(90px, 1fr));
+      gap: 8px;
+    }
+
+    .rmvt-kpi {
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 9px 10px;
+      background: #f8fafc;
+    }
+
+    .rmvt-kpi-label {
+      font-size: 9px;
+      font-weight: 800;
+      color: var(--t3);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+
+    .rmvt-kpi-value {
+      margin-top: 3px;
+      font-family: var(--mono);
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--blue);
+    }
+
+    .rmvt-columns {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr 1fr;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    .rmvt-scroll {
+      overflow: auto;
+      min-height: 0;
+    }
+
+    .rmvt-row {
+      display: grid;
+      grid-template-columns: 76px 76px 1fr;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid #edf0f5;
+      align-items: baseline;
+      font-size: 12px;
+    }
+
+    .rmvt-row:last-child {
+      border-bottom: none;
+    }
+
+    .rmvt-branch {
+      font-family: var(--mono);
+      font-weight: 800;
+      color: var(--blue);
+    }
+
+    .rmvt-type {
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--t3);
+    }
+
+    .rmvt-change {
+      color: var(--t1);
+      word-break: break-word;
+    }
+
+    .rmvt-empty {
+      padding: 18px;
+      text-align: center;
+      color: var(--t3);
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      background: #f8fafc;
+      font-size: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <div class="hl">
+      <?!= include('Modal_Logo'); ?>
+      <div class="hl-info">
+        <div class="hl-row">
+          <div class="hl-appname">Vyhodnocení odpisů akčních artiklů</div>
+        </div>
+        <div class="hl-row">
+          <div class="hl-email">Výsledky RM+VT</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hr">
+      <div class="hr-icon">📋</div>
+      <div class="hr-txt">
+        <div class="hr-title">Výsledek aktualizace RM+VT</div>
+        <div class="hr-sub" id="subtitle">Načítání výsledků...</div>
+      </div>
+    </div>
+
+    <div class="lp">
+      <div class="lp-label">Souhrn</div>
+      <div id="logbox"></div>
+    </div>
+
+    <div id="main">
+      <div class="rmvt-result-wrap" id="resultRoot">
+        <div class="rmvt-empty">Načítám výsledek...</div>
+      </div>
+    </div>
+
+    <div class="fl">
+      <div class="fl-dot ready" id="sDot"></div>
+      <div class="fl-txt" id="sTxt">Připraveno</div>
+    </div>
+
+    <div class="fr">
+      <div class="fr-prog">
+        <div class="fr-prog-top">
+          <span>Výsledek aktualizace</span>
+          <span></span>
+        </div>
+        <div class="fr-bar"><div class="fr-fill" style="width:100%"></div></div>
+      </div>
+      <div class="fr-btns">
+        <button class="btn btn-s" onclick="google.script.host.close()">Zavřít</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+      });
+    }
+
+    function log(msg, level) {
+      var box = document.getElementById('logbox');
+      var el = document.createElement('div');
+      el.className = 'll';
+      el.innerHTML = '<span class="ll-t">[info]</span><span class="ll-m ' + (level || 'info') + '">' + esc(msg) + '</span>';
+      box.appendChild(el);
+    }
+
+    function init() {
+      google.script.run
+        .withSuccessHandler(renderResult)
+        .withFailureHandler(function (e) {
+          var msg = e && e.message ? e.message : String(e);
+          document.getElementById('sDot').className = 'fl-dot err';
+          document.getElementById('sTxt').textContent = 'Chyba';
+          document.getElementById('resultRoot').innerHTML = '<div class="rmvt-empty" style="color:var(--red)">' + esc(msg) + '</div>';
+        })
+        .moduleRmVt_getLastResult();
+    }
+
+    function renderResult(r) {
+      var s = r.summary || {};
+      document.getElementById('subtitle').textContent = 'Zdroj: ' + ((r.sourceFile && r.sourceFile.name) || 'neznámý soubor');
+
+      log('Lokálně: ' + (s.localBranches || 0) + ' filiálek');
+      log('Zdroj: ' + (s.sourceBranches || 0) + ' filiálek');
+      log('Upraveno: ' + (s.updatedRows || 0) + ' řádků', 'ok');
+
+      var html = '<div class="rmvt-card">' +
+        '<div class="rmvt-card-title">Souhrn</div>' +
+        '<div class="rmvt-kpis">' +
+        kpi('Lokálně', s.localBranches || 0) +
+        kpi('Zdroj', s.sourceBranches || 0) +
+        kpi('Upraveno', s.updatedRows || 0) +
+        kpi('LC změny', s.lcChanges || 0) +
+        kpi('RM změny', s.rmChanges || 0) +
+        kpi('VT změny', s.vtChanges || 0) +
+        '</div></div>';
+
+      html += '<div class="rmvt-card"><div class="rmvt-card-title">Zdrojový soubor</div>' +
+        '<div class="fg-hint"><strong>' + esc(r.sourceFile.name) + '</strong></div></div>';
+
+      html += '<div class="rmvt-columns">';
+      html += sectionLcCounts(r.lcCounts || []);
+      html += sectionChanges(r.changes || []);
+      html += sectionColoring(r.coloring || []);
+      html += '</div>';
+
+      document.getElementById('resultRoot').innerHTML = html;
+    }
+
+    function kpi(label, value) {
+      return '<div class="rmvt-kpi"><div class="rmvt-kpi-label">' + esc(label) + '</div><div class="rmvt-kpi-value">' + esc(value) + '</div></div>';
+    }
+
+    function sectionLcCounts(items) {
+      var html = '<div class="rmvt-card rmvt-scroll"><div class="rmvt-card-title">Počty filiálek podle LC</div>';
+      if (!items.length) return html + '<div class="rmvt-empty">Počty podle LC beze změny.</div></div>';
+      items.forEach(function (x) {
+        html += '<div class="rmvt-row"><span class="rmvt-branch">' + esc(x.lc) + '</span><span class="rmvt-type">počet</span><span class="rmvt-change">' +
+          esc(x.local) + ' → ' + esc(x.source) + ' (' + (x.delta > 0 ? '+' : '') + esc(x.delta) + ')</span></div>';
+      });
+      return html + '</div>';
+    }
+
+    function sectionChanges(items) {
+      var html = '<div class="rmvt-card rmvt-scroll"><div class="rmvt-card-title">Změny RM / VT / LC</div>';
+      if (!items.length) return html + '<div class="rmvt-empty">Žádné rozdíly nebyly nalezeny.</div></div>';
+      items.slice(0, 500).forEach(function (ch) {
+        html += '<div class="rmvt-row"><span class="rmvt-branch">' + esc(ch.branchId) + '</span><span class="rmvt-type">' + esc(ch.type) + '</span><span class="rmvt-change">' +
+          (ch.message ? esc(ch.message) : esc(ch.from) + ' → ' + esc(ch.to)) + '</span></div>';
+      });
+      if (items.length > 500) html += '<div class="fg-hint">Zobrazeno prvních 500 změn z ' + esc(items.length) + '.</div>';
+      return html + '</div>';
+    }
+
+    function sectionColoring(items) {
+      var html = '<div class="rmvt-card rmvt-scroll"><div class="rmvt-card-title">Obarvení skupin RM</div>';
+      if (!items.length) return html + '<div class="rmvt-empty">Žádné listy k obarvení.</div></div>';
+      items.forEach(function (x) {
+        html += '<div class="rmvt-row"><span class="rmvt-branch">' + esc(x.sheet) + '</span><span class="rmvt-type">B:M</span><span class="rmvt-change">' +
+          esc(x.message) + (x.rows ? ', ' + esc(x.rows) + ' řádků' : '') + '</span></div>';
+      });
+      return html + '</div>';
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+
+</html>

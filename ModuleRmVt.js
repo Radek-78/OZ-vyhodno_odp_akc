@@ -7,6 +7,7 @@
 
 const ModuleRmVt = {
   CONFIG_FOLDER_KEY: 'rmVtFolderId',
+  RESULT_CACHE_KEY: 'rmVtLastResult',
   LOCAL_SHEET_NAME: 'Filiálky',
   SOURCE_SHEET_NAME: 'Filiálky',
   SUPPORTED_MIME_TYPES: [
@@ -283,8 +284,18 @@ function showRmVtModal() {
   const html = HtmlService
     .createTemplateFromFile('Modal_RmVt')
     .evaluate()
-    .setWidth(920)
-    .setHeight(680);
+    .setWidth(APP.MODAL_WIDTH)
+    .setHeight(APP.MODAL_HEIGHT);
+
+  SpreadsheetApp.getUi().showModelessDialog(html, ' ');
+}
+
+function showRmVtResultModal() {
+  const html = HtmlService
+    .createTemplateFromFile('Modal_RmVt_Result')
+    .evaluate()
+    .setWidth(APP.MODAL_WIDTH)
+    .setHeight(APP.MODAL_HEIGHT);
 
   SpreadsheetApp.getUi().showModelessDialog(html, ' ');
 }
@@ -298,5 +309,21 @@ function moduleRmVt_saveFolder(folderId) {
 }
 
 function moduleRmVt_run(folderId) {
-  return ModuleRmVt.run(folderId);
+  const result = ModuleRmVt.run(folderId);
+  CacheService
+    .getUserCache()
+    .put(ModuleRmVt.RESULT_CACHE_KEY, JSON.stringify(result), 1800);
+
+  showRmVtResultModal();
+  return {
+    success: true,
+    summary: result.summary,
+    sourceFile: result.sourceFile
+  };
+}
+
+function moduleRmVt_getLastResult() {
+  const raw = CacheService.getUserCache().get(ModuleRmVt.RESULT_CACHE_KEY);
+  if (!raw) throw new Error('Výsledek aktualizace už není k dispozici. Spusťte aktualizaci znovu.');
+  return JSON.parse(raw);
 }
