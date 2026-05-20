@@ -3,15 +3,10 @@
        KT MODULE
        ═══════════════════════════════════════════ */
     function vKT(m) {
-        var w = S.data.currentWeek || { week: '', year: new Date().getFullYear() };
-        var wk = w.week || '';
-        var yr = w.year || new Date().getFullYear();
-        var pad = String(wk).padStart(2, '0');
+        var pref = S.data.ktPref || { actionDate: '', useSubfolders: false, targetFolderId: '' };
+        var today = new Date();
+        var defaultDate = pref.actionDate || today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
 
-        // Preference z getInitialData() — okamžitě k dispozici (čte jen AppConfig, bez Drive API)
-        var pref = S.data.ktPref || { prefix: 'KT', suffix: '', useSubfolders: false, targetFolderId: '' };
-        var pfx = (pref.prefix !== undefined && pref.prefix !== null) ? pref.prefix : 'KT';
-        var sfx = pref.suffix || ('_' + yr);
         // Složka se načítá lazy — zobrazíme placeholder a aktualizujeme async níže
         var autoName = S.data.ktAutoFolderName || '…';
         var autoId = S.data.ktAutoFolderId || '';
@@ -19,72 +14,38 @@
         m.innerHTML =
             '<div class="kt-wrap">' +
 
-            /* ── Hlavní karta: datum + název + náhled ── */
             '<div class="kt-main-card">' +
             '<div class="kt-top-bar"></div>' +
             '<div class="kt-card-body">' +
 
-            /* Řádek polí: datum | oddělovač | název souboru */
             '<div class="kt-fields-row">' +
-
-            /* Datum */
-            '<div class="kt-date-group">' +
-            '<div class="kt-sec-lbl">Datum</div>' +
-            '<div class="kt-date-inputs">' +
-            '<div class="fg">' +
-            '<div class="fg-label">KT</div>' +
-            '<input class="fg-input" type="number" id="fKtW" value="' + wk + '" min="1" max="53" style="text-align:center">' +
+            '<div class="kt-date-group" style="flex:0 0 230px">' +
+            '<div class="kt-sec-lbl">Datum akce</div>' +
+            '<div class="fg" style="margin-bottom:0">' +
+            '<div class="fg-label">Akce od</div>' +
+            '<input class="fg-input" type="date" id="fKtDate" value="' + esc(defaultDate) + '" style="font-size:13px">' +
             '</div>' +
-            '<span class="kt-slash">/</span>' +
-            '<div class="fg">' +
-            '<div class="fg-label">Rok</div>' +
-            '<input class="fg-input" type="number" id="fKtY" value="' + yr + '" min="2020" max="2099" style="text-align:center">' +
-            '</div>' +
-            '</div>' +
-            '<div class="fg-hint" style="margin-top:6px">ISO 8601 · auto</div>' +
+            '<div class="fg-hint" id="ktDateHint" style="margin-top:6px">Vyberte datum pro nový soubor.</div>' +
             '</div>' +
 
-            /* Vertikální oddělovač */
             '<div class="kt-vdiv"></div>' +
 
-            /* Název souboru */
             '<div class="kt-name-group">' +
             '<div class="kt-sec-lbl">Název souboru</div>' +
-            '<div class="kt-name-inputs">' +
-            '<div class="fg kt-pfx">' +
-            '<div class="fg-label">Prefix</div>' +
-            '<input class="fg-input" type="text" id="fKtPfx" value="' + esc(pfx) + '" style="text-align:center;font-size:12px">' +
-            '</div>' +
-            '<div class="fg">' +
-            '<div class="fg-label">Název</div>' +
-            '<input class="fg-input" type="text" id="fKtName" value="' + pad + '" style="font-size:12px">' +
-            '</div>' +
-            '<div class="fg kt-sfx">' +
-            '<div class="fg-label">Suffix</div>' +
-            '<input class="fg-input" type="text" id="fKtSfx" value="' + esc(sfx) + '" style="font-size:12px">' +
-            '</div>' +
-            '</div>' +
-            '<label class="cbox" style="margin-top:10px;margin-bottom:0">' +
-            '<input type="checkbox" id="fKtAddDate">' +
-            '<span style="font-size:11px">Přidat datum jako suffix</span>' +
-            '</label>' +
-            '</div>' +
-
-            '</div>' + /* end kt-fields-row */
-
-            /* Náhled výsledného názvu */
-            '<div class="kt-preview-strip">' +
+            '<div class="kt-preview-strip" style="margin-top:0">' +
             '<span class="kt-prev-lbl">Výsledný název</span>' +
             '<div class="kt-prev-val">' +
             '<span class="kt-prev-icon">📄</span>' +
             '<span id="ktPrev" class="kt-prev-text"></span>' +
             '</div>' +
             '</div>' +
+            '<div class="kt-path-preview" id="ktDatePreview" style="margin-top:10px"></div>' +
+            '</div>' +
+            '</div>' +
 
-            '</div>' + /* end kt-card-body */
-            '</div>' + /* end kt-main-card */
+            '</div>' +
+            '</div>' +
 
-            /* ── Karta složky ── */
             '<div class="kt-folder-card">' +
             '<div class="kt-sec-lbl" style="margin-bottom:10px">Cílová složka</div>' +
             '<div class="kt-folder-controls">' +
@@ -108,10 +69,10 @@
             '</label>' +
             '<div class="kt-path-preview" id="ktPathPrev" style="display:none"></div>' +
             '</div>' +
-            '</div>' + /* end kt-folder-card */
+            '</div>' +
 
             '<div id="ktRes"></div>' +
-            '</div>'; /* end kt-wrap */
+            '</div>';
 
         var fBtns = document.getElementById('fBtns');
         if (fBtns) {
@@ -119,32 +80,55 @@
                 '<button class="btn btn-s" onclick="go(\'home\')">Zrušit</button>';
         }
 
-        // ── Event listeners ──
-        var wEl = document.getElementById('fKtW');
-        var yEl = document.getElementById('fKtY');
-        var pfxEl = document.getElementById('fKtPfx');
-        var nameEl = document.getElementById('fKtName');
-        var sfxEl = document.getElementById('fKtSfx');
+        var dateEl = document.getElementById('fKtDate');
         var subEl = document.getElementById('fKtSub');
-        var dateEl = document.getElementById('fKtAddDate');
 
-        function ktUpdPreview() {
-            var p = pfxEl.value, n = nameEl.value, s = sfxEl.value;
-            if (dateEl && dateEl.checked) {
-                var d = new Date();
-                var m = String(d.getMonth() + 1).padStart(2, '0');
-                var day = String(d.getDate()).padStart(2, '0');
-                s += '_' + d.getFullYear() + '_' + m + '_' + day;
-            }
-            var prevEl = document.getElementById('ktPrev');
-            if (prevEl) prevEl.textContent = p + n + s;
-            ktUpdPath();
+        function ktDateInfo() {
+            var raw = dateEl.value;
+            if (!raw) return null;
+            var parts = raw.split('-').map(Number);
+            var d = new Date(parts[0], parts[1] - 1, parts[2]);
+            if (isNaN(d.getTime())) return null;
+            var dayNames = ['NEDĚLE', 'PONDĚLÍ', 'ÚTERÝ', 'STŘEDA', 'ČTVRTEK', 'PÁTEK', 'SOBOTA'];
+            return {
+                date: d,
+                iso: raw,
+                week: isoWeek(d),
+                year: d.getFullYear(),
+                dayName: dayNames[d.getDay()],
+                display: String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + d.getFullYear()
+            };
         }
 
-        function ktUpdName() {
-            nameEl.value = String(wEl.value).padStart(2, '0');
-            if (!sfxEl.dataset.manual) sfxEl.value = '_' + yEl.value;
-            ktUpdPreview();
+        function isoWeek(date) {
+            var d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            var dayNum = d.getUTCDay() || 7;
+            d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+            var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+            return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        }
+
+        function ktFileName(info) {
+            return 'KT_' + String(info.week).padStart(2, '0') + '_' + info.dayName + '_' + info.year;
+        }
+
+        function ktUpdPreview() {
+            var info = ktDateInfo();
+            var prevEl = document.getElementById('ktPrev');
+            var hintEl = document.getElementById('ktDateHint');
+            var datePreviewEl = document.getElementById('ktDatePreview');
+            if (!info) {
+                if (prevEl) prevEl.textContent = '';
+                if (hintEl) hintEl.textContent = 'Vyberte platné datum.';
+                if (datePreviewEl) datePreviewEl.textContent = '';
+                ktUpdPath();
+                return;
+            }
+
+            if (prevEl) prevEl.textContent = ktFileName(info);
+            if (hintEl) hintEl.textContent = 'KT ' + String(info.week).padStart(2, '0') + ' · ' + info.dayName + ' · ' + info.year;
+            if (datePreviewEl) datePreviewEl.innerHTML = '<span style="font-size:12px">📌</span> Do listů BNL/OLO/CER/BUS/BRV se zapíše <strong>Akce od ' + esc(info.display) + '</strong> do buňky B8';
+            ktUpdPath();
         }
 
         function ktUpdPath() {
@@ -152,34 +136,22 @@
             var pathEl = document.getElementById('ktPathPrev');
             if (!pathEl) return;
             if (!sub) { pathEl.style.display = 'none'; return; }
+            var info = ktDateInfo();
+            if (!info) { pathEl.style.display = 'none'; return; }
             pathEl.style.display = 'flex';
 
             var folderName = S.data.ktAutoFolderName || '…';
             var isCustom = document.querySelector('input[name="ktFolder"]:checked');
             if (isCustom && isCustom.value === 'custom') folderName = 'Vlastní složka';
 
-            var y = yEl.value, w = String(wEl.value).padStart(2, '0');
-            var s = sfxEl.value;
-            if (dateEl && dateEl.checked) {
-                var d = new Date();
-                var m = String(d.getMonth() + 1).padStart(2, '0');
-                var day = String(d.getDate()).padStart(2, '0');
-                s += '_' + d.getFullYear() + '_' + m + '_' + day;
-            }
-            var fn = pfxEl.value + nameEl.value + s;
             pathEl.innerHTML = '<span style="font-size:12px">📁</span> ' +
-                esc(folderName) + ' / <strong>' + esc(y) + '</strong> / <strong>KT' + esc(w) + '</strong> / ' + esc(fn);
+                esc(folderName) + ' / <strong>' + esc(info.year) + '</strong> / <strong>KT' + esc(String(info.week).padStart(2, '0')) + '</strong> / ' + esc(ktFileName(info));
         }
 
-        wEl.addEventListener('input', ktUpdName);
-        yEl.addEventListener('input', ktUpdName);
-        pfxEl.addEventListener('input', ktUpdPreview);
-        nameEl.addEventListener('input', ktUpdPreview);
-        sfxEl.addEventListener('input', function () { sfxEl.dataset.manual = '1'; ktUpdPreview(); });
+        dateEl.addEventListener('change', ktUpdPreview);
+        dateEl.addEventListener('input', ktUpdPreview);
         subEl.addEventListener('change', ktUpdPath);
-        if (dateEl) dateEl.addEventListener('change', ktUpdPreview);
 
-        // Radio: přepínání auto/custom
         document.querySelectorAll('input[name="ktFolder"]').forEach(function (r) {
             r.addEventListener('change', function () {
                 var wrap = document.getElementById('ktCustomWrap');
@@ -188,12 +160,8 @@
             });
         });
 
-        // Initial preview + subfolder path
         ktUpdPreview();
 
-        // Lazy load: složka šablony (2× Drive API) se načítá asynchronně
-        // aby neblokovala zobrazení formuláře ani inicializaci modalu.
-        // Pokud máme data z předchozí návštěvy, nepotřebujeme znovu volat.
         if (!S.data.ktAutoFolderId && !S.data._ktFolderLoaded) {
             google.script.run
                 .withSuccessHandler(function (info) {
@@ -201,7 +169,6 @@
                     S.data.ktAutoFolderName = info.autoFolderName || 'Kořen Drive';
                     S.data.ktAutoFolderId = info.autoFolderId || '';
                     S.data._ktFolderLoaded = true;
-                    // Aktualizovat UI pokud je uživatel stále na KT modulu
                     var autoInfoEl = document.getElementById('ktAutoInfo');
                     if (autoInfoEl) {
                         autoInfoEl.innerHTML = '<span>📂</span> <strong>' + esc(S.data.ktAutoFolderName) + '</strong>' +
@@ -252,8 +219,6 @@
 
         var circleEl = document.getElementById('ktCdCircle');
         var sec = 5;
-
-        // Plynulá animace conic-gradient přes requestAnimationFrame
         var startTime = Date.now();
         var totalMs = 5000;
 
@@ -292,30 +257,23 @@
 
     function execKT() {
         if (S.busy) return;
-        var w = document.getElementById('fKtW').value;
-        var y = document.getElementById('fKtY').value;
-        var pfx = document.getElementById('fKtPfx').value;
-        var nm = document.getElementById('fKtName').value;
-        var sfx = document.getElementById('fKtSfx').value;
+        var dateEl = document.getElementById('fKtDate');
+        var actionDate = dateEl ? dateEl.value : '';
+        var info = actionDate ? (function () {
+            var parts = actionDate.split('-').map(Number);
+            var d = new Date(parts[0], parts[1] - 1, parts[2]);
+            return isNaN(d.getTime()) ? null : true;
+        })() : null;
+
+        if (!info) { alert('Vyberte platné datum akce.'); return; }
+
         var useSub = document.getElementById('fKtSub').checked;
-        var addDate = document.getElementById('fKtAddDate').checked;
-
-        if (addDate) {
-            var d = new Date();
-            var m = String(d.getMonth() + 1).padStart(2, '0');
-            var day = String(d.getDate()).padStart(2, '0');
-            sfx += '_' + d.getFullYear() + '_' + m + '_' + day;
-        }
-
         var folderRadio = document.querySelector('input[name="ktFolder"]:checked');
         var folderMode = folderRadio ? folderRadio.value : 'auto';
         var folderId = '';
         if (folderMode === 'custom') {
             folderId = document.getElementById('fKtFolder').value.trim();
         }
-
-        var fullName = pfx + nm + sfx;
-        if (!w || !y || !fullName) { alert('Vyplňte všechna pole'); return; }
 
         setBusy(true);
         setProgress(10, 'Kopíruji šablonu...');
@@ -334,11 +292,7 @@
             })
             .withFailureHandler(function (e) { setBusy(false); setProgress(0, ''); onErr(e); })
             .moduleKT_create({
-                week: parseInt(w),
-                year: parseInt(y),
-                prefix: pfx,
-                name: nm,
-                suffix: sfx,
+                actionDate: actionDate,
                 targetFolderId: folderId,
                 useSubfolders: useSub
             });

@@ -5,7 +5,7 @@
  *
  * Vytváří nový Google Sheets soubor
  * zkopírováním šablony (mustru) a pojmenuje
- * jej podle kalendářního týdne.
+ * jej podle data akce.
  * ══════════════════════════════════════════════
  */
 
@@ -15,11 +15,7 @@ const ModuleKT = {
    * Vytvoření nového KT souboru
    * Šablona = aktuální tabulka (mustr).
    * @param {Object} params
-   * @param {number} params.week - číslo kalendářního týdne
-   * @param {number} params.year - rok
-   * @param {string} params.prefix - prefix názvu (výchozí 'KT')
-   * @param {string} params.name - střed názvu (výchozí = číslo týdne)
-   * @param {string} params.suffix - suffix názvu (výchozí = '_rok')
+   * @param {string} params.actionDate - datum akce ve formátu yyyy-MM-dd
    * @param {string} [params.targetFolderId] - URL nebo ID cílové složky (prázdné = auto)
    * @param {boolean} [params.useSubfolders] - true = vytvořit rok/KTxx podsložky
    * @returns {{ success: boolean, fileId?: string, fileName?: string, url?: string, error?: string }}
@@ -29,16 +25,14 @@ const ModuleKT = {
     AppLogger.info('═══ Nový KT soubor ═══');
 
     try {
-      var week = params.week;
-      var year = params.year;
-      var prefix = (params.prefix !== undefined && params.prefix !== null) ? params.prefix : 'KT';
-      var name = (params.name !== undefined && params.name !== null) ? params.name : String(week).padStart(2, '0');
-      var suffix = (params.suffix !== undefined && params.suffix !== null) ? params.suffix : ('_' + year);
+      var dateInfo = ModuleKT.getDateInfo_(params.actionDate);
+      var week = dateInfo.week;
+      var year = dateInfo.year;
       var useSubfolders = (params.useSubfolders === true || params.useSubfolders === 'true');
-
-      var fileName = prefix + name + suffix;
+      var fileName = 'KT_' + String(week).padStart(2, '0') + '_' + dateInfo.dayName + '_' + year;
 
       AppLogger.info('Týden: KT ' + String(week).padStart(2, '0') + ' / ' + year);
+      AppLogger.info('Datum akce: ' + dateInfo.displayDate + ' (' + dateInfo.dayName + ')');
       AppLogger.info('Název souboru: ' + fileName);
       AppLogger.dim('Podsložky: ' + (useSubfolders ? 'ano' : 'ne'));
 
@@ -71,13 +65,14 @@ const ModuleKT = {
       // Otevření a nastavení parametrů
       AppLogger.info('Nastavuji parametry...');
       var newSS = SpreadsheetApp.open(newFile);
+      ModuleKT.writeActionDate_(newSS, dateInfo.displayDate);
 
       // Pokud nový soubor má _Config list, nastavíme week/year
       var configSheet = newSS.getSheetByName('_Config');
       if (configSheet) {
         var cfgLastRow = configSheet.getLastRow();
         var data = cfgLastRow > 0 ? configSheet.getRange(1, 1, cfgLastRow, 2).getValues() : [];
-        var weekSet = false, yearSet = false;
+        var weekSet = false, yearSet = false, dateSet = false;
 
         for (var i = 0; i < data.length; i++) {
           if (data[i][0] === 'ktWeek') {
@@ -86,6 +81,9 @@ const ModuleKT = {
           } else if (data[i][0] === 'ktYear') {
             configSheet.getRange(i + 1, 2).setValue(year);
             yearSet = true;
+          } else if (data[i][0] === 'ktActionDate') {
+            configSheet.getRange(i + 1, 2).setValue(dateInfo.isoDate);
+            dateSet = true;
           }
         }
 
@@ -96,6 +94,10 @@ const ModuleKT = {
         if (!yearSet) {
           var lr2 = configSheet.getLastRow() + 1;
           configSheet.getRange(lr2, 1, 1, 2).setValues([['ktYear', year]]);
+        }
+        if (!dateSet) {
+          var lr3 = configSheet.getLastRow() + 1;
+          configSheet.getRange(lr3, 1, 1, 2).setValues([['ktActionDate', dateInfo.isoDate]]);
         }
 
         AppLogger.ok('Parametry nastaveny (KT' + String(week).padStart(2, '0') + '/' + year + ') ✓');
@@ -121,6 +123,46 @@ const ModuleKT = {
         error: e.message
       };
     }
+  },
+
+  /**
+   * @private
+   * @param {string} actionDate
+   * @returns {{date: Date, isoDate: string, displayDate: string, week: number, year: number, dayName: string}}
+   */
+  getDateInfo_(actionDate) {
+    if (!actionDate) throw new Error('Zadejte datum akce.');
+    var parts = String(actionDate).split('-').map(Number);
+    if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
+      throw new Error('Datum akce musí být ve formátu yyyy-MM-dd.');
+    }
+
+    var date = new Date(parts[0], parts[1] - 1, parts[2]);
+    if (isNaN(date.getTime())) throw new Error('Neplatné datum akce.');
+
+    var dayNames = ['NEDĚLE', 'PONDĚLÍ', 'ÚTERÝ', 'STŘEDA', 'ČTVRTEK', 'PÁTEK', 'SOBOTA'];
+    return {
+      date: date,
+      isoDate: Utilities.formatDate(date, 'Europe/Prague', 'yyyy-MM-dd'),
+      displayDate: Utilities.formatDate(date, 'Europe/Prague', 'dd.MM.yyyy'),
+      week: Utils.getWeekNumber(date),
+      year: date.getFullYear(),
+      dayName: dayNames[date.getDay()]
+    };
+  },
+
+  /**
+   * Zapíše datum akce do výstupních listů nového souboru.
+   * @private
+   * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+   * @param {string} displayDate
+   */
+  writeActionDate_(ss, displayDate) {
+    ['BNL', 'OLO', 'CER', 'BUS', 'BRV'].forEach(function (name) {
+      var sheet = ss.getSheetByName(name);
+      if (sheet) sheet.getRange('B8').setValue('Akce od ' + displayDate);
+    });
+    AppLogger.ok('Datum akce zapsáno do listů BNL/OLO/CER/BUS/BRV ✓');
   },
 
   /**
@@ -196,10 +238,9 @@ const ModuleKT = {
     try {
       // Dávkový zápis — 1 čtení + 1 zápis místo 4 × (čtení + zápis)
       const updates = {};
-      if (params.prefix !== undefined) updates['ktPrefix'] = params.prefix;
-      if (params.suffix !== undefined) updates['ktSuffix'] = params.suffix;
       if (params.useSubfolders !== undefined) updates['ktUseSubfolders'] = params.useSubfolders ? '1' : '0';
       if (params.targetFolderId !== undefined) updates['ktTargetFolderId'] = params.targetFolderId || '';
+      if (params.actionDate !== undefined) updates['ktActionDate'] = params.actionDate || '';
       if (Object.keys(updates).length > 0) AppConfig.setMultiple(updates);
     } catch (e) {
       // Preferences save is non-critical
@@ -222,8 +263,7 @@ const ModuleKT = {
       useSub = (String(subVal) === '1' || subVal === true);
     }
     return {
-      prefix: AppConfig.get('ktPrefix') || 'KT',
-      suffix: AppConfig.get('ktSuffix') || '',
+      actionDate: AppConfig.get('ktActionDate') || '',
       useSubfolders: useSub,
       targetFolderId: AppConfig.get('ktTargetFolderId') || ''
     };
