@@ -113,10 +113,10 @@
         background: #e5efff !important;
     }
 
-    /* File-type badge (top-left corner) */
+    /* File-type badge */
     .im-slot-badge {
         position: absolute;
-        top: 7px;
+        bottom: 7px;
         left: 7px;
         background: var(--blue);
         color: #fff;
@@ -215,15 +215,22 @@
     }
 
     .im-slot-name {
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 700;
         color: var(--blue-deep);
-        white-space: nowrap;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        white-space: normal;
         overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 130px;
+        text-overflow: clip;
+        max-width: 138px;
+        max-height: 32px;
         margin-top: 3px;
         font-family: var(--mono);
+        line-height: 1.35;
+        text-align: center;
+        overflow-wrap: anywhere;
     }
 
     .im-slot-remove {
@@ -247,31 +254,6 @@
     }
 
     .im-slot-remove:hover { opacity: 1; }
-
-    /* Always-present sub-row — reserves height before file is loaded */
-    .im-slot-sub {
-        height: 28px;
-        margin-top: 6px;
-        display: flex;
-        align-items: center;
-    }
-
-    .im-slot-sub .fg-input {
-        padding: 4px 8px;
-        font-size: 11px;
-        height: 28px;
-    }
-
-    .im-slot-sheet-label {
-        font-size: 10px;
-        color: var(--t2);
-        font-family: var(--mono);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        width: 100%;
-        text-align: center;
-    }
 
     /* Config cards with left accent stripe */
     .im-config-grid {
@@ -399,6 +381,18 @@
         color: var(--t1);
         line-height: 1.25;
     }
+
+    .im-target-select {
+        width: 100%;
+        height: 28px;
+        padding: 4px 8px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--t1);
+        font-size: 11px;
+        font-weight: 600;
+    }
 </style>
 
 <script>
@@ -416,6 +410,26 @@
 
         function emptySlots() {
             return SLOT_CONFIGS.map(function () { return {}; });
+        }
+
+        function getSlotTarget(i) {
+            var cfg = SLOT_CONFIGS[i] || {};
+            return S._impSlots[i].targetSheet || cfg.target || '';
+        }
+
+        function renderTargetOptions(selected) {
+            var sheets = S.data.sheets || [];
+            var found = false;
+            var html = sheets.map(function (sh) {
+                var isSel = sh.name === selected;
+                if (isSel) found = true;
+                return '<option value="' + esc(sh.name) + '"' + (isSel ? ' selected' : '') + '>' + esc(sh.name) + '</option>';
+            }).join('');
+
+            if (selected && !found) {
+                html = '<option value="' + esc(selected) + '" selected>' + esc(selected) + '</option>' + html;
+            }
+            return html;
         }
 
         window.vImport = function (m) {
@@ -456,22 +470,11 @@
                 html += '<input type="file" id="fi' + i + '" accept=".xlsx,.csv" hidden onchange="imHandleFile(this,' + i + ')">';
                 html += '</div>';
 
-                // Vždy rezervovat místo pro výběr listu — zabrání posunu layoutu
-                html += '<div class="im-slot-sub">';
-                if (s.sheetNames && s.sheetNames.length > 1) {
-                    html += '<select class="fg-input sm" onchange="imSetFileSheet(' + i + ', this.value)">' +
-                        s.sheetNames.map(function (sn, idx) {
-                            return '<option value="' + idx + '"' + (idx == s.sheetIdx ? ' selected' : '') + '>List: ' + esc(sn) + '</option>';
-                        }).join('') +
-                        '</select>';
-                } else if (s.sheetNames && s.sheetNames.length === 1) {
-                    html += '<span class="im-slot-sheet-label">📋 ' + esc(s.sheetNames[0]) + '</span>';
-                }
-                html += '</div>';
-
                 html += '<div class="im-target-card">' +
                     '<div class="im-target-title">Cíl</div>' +
-                    '<div class="im-target-sheet">' + esc(cfg.target) + '</div>' +
+                    '<select class="im-target-select" onchange="imSetTargetSheet(' + i + ', this.value)">' +
+                    renderTargetOptions(getSlotTarget(i)) +
+                    '</select>' +
                     '</div>';
 
                 html += '</div>';
@@ -505,8 +508,8 @@
         window.imHandleFile = function (el, i) {
             if (el.files && el.files[0]) imProcessFile(el.files[0], i);
         };
-        window.imSetFileSheet = function (slotIdx, sheetIdx) {
-            S._impSlots[slotIdx].sheetIdx = parseInt(sheetIdx);
+        window.imSetTargetSheet = function (slotIdx, sheetName) {
+            S._impSlots[slotIdx].targetSheet = sheetName;
         };
 
         async function imProcessFile(file, i) {
@@ -515,7 +518,8 @@
                 return;
             }
 
-            S._impSlots[i] = { file: file, name: file.name, status: 'loading' };
+            var currentTarget = getSlotTarget(i);
+            S._impSlots[i] = { file: file, name: file.name, status: 'loading', targetSheet: currentTarget };
             setLoading(true, 'Načítám listy...', file.name);
             render();
 
@@ -573,7 +577,7 @@
 
             for (var i = 0; i < queue.length; i++) {
                 var slot = queue[i].slot;
-                var targetSheet = queue[i].config.target;
+                var targetSheet = queue[i].slot.targetSheet || queue[i].config.target;
                 var file = slot.file;
                 var sourceSheetIdx = slot.sheetIdx || 0;
                 var nextStartRow = 1;
