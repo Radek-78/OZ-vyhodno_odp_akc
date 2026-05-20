@@ -1,0 +1,318 @@
+<script>
+    /* ═══════════════════════════════════════════
+       PDF MODULE (DUAL MODE: STANDARD / BATCH)
+       ═══════════════════════════════════════════ */
+    S.pdfData = { sheets: [], lcs: [], branches: [], folderId: '' };
+    if (!S._pdfMode) S._pdfMode = 'standard';
+
+    window.pdfSetMode = function (m) {
+        S._pdfMode = m;
+        var wrap = document.getElementById('main');
+        if (S.mod === 'pdf') vPDF(wrap);
+    };
+
+    function vPDF(m) {
+        // Obě rozhraní sdílejí načtení dat
+        setLoading(true, 'Příprava PDF', 'Načítání konfigurace...');
+        google.script.run
+            .withSuccessHandler(function (d) {
+                setLoading(false);
+                S.pdfData = d || { sheets: [], lcs: [], branches: [], folderId: '' };
+                renderPdfUi(m);
+            })
+            .withFailureHandler(function (e) { setLoading(false); onErr(e); })
+            .modulePDF_getInitData();
+    }
+
+    function renderPdfUi(m) {
+        var d = S.pdfData;
+        var mode = S._pdfMode;
+
+        var modeHtml =
+            '<div class="im-mode-grid">' +
+            '<div class="im-mode-card' + (mode === 'standard' ? ' active' : '') + '" onclick="pdfSetMode(\'standard\')">' +
+            '<div class="im-mode-icon">📄</div>' +
+            '<div class="im-mode-body"><span class="im-mode-title">Standardní export listů</span><span class="im-mode-sub">Uložit vybrané listy do PDF. Původní funkce.</span></div>' +
+            '</div>' +
+            '<div class="im-mode-card' + (mode === 'batch' ? ' active' : '') + '" onclick="pdfSetMode(\'batch\')">' +
+            '<div class="im-mode-icon">🏢</div>' +
+            '<div class="im-mode-body"><span class="im-mode-title">Dávkové generování filiálek</span><span class="im-mode-sub">Iterativní rendering pro jednotlivé pobočky.</span></div>' +
+            '</div>' +
+            '</div>';
+
+        if (mode === 'standard') {
+            // ============================================
+            // REŽIM STANDARD
+            // ============================================
+            var cbs = d.sheets.map(function (sheet, i) {
+                return '<label class="cbox"><input type="checkbox" class="sCb" value="' + esc(sheet) + '"' + (i === 0 ? ' checked' : '') + '><span>' + esc(sheet) + '</span></label>';
+            }).join('');
+
+            m.innerHTML =
+                '<div class="pdf-wrap">' +
+                modeHtml +
+
+                /* Karta: Listy pro export */
+                '<div class="pdf-card">' +
+                '<div class="pdf-card-bar"></div>' +
+                '<div class="pdf-card-body">' +
+                '<div class="kt-sec-lbl">Listy pro export</div>' +
+                '<div style="display:flex;gap:6px;margin-bottom:10px">' +
+                '<button class="btn btn-s" onclick="pdfSelAllStd(true)" style="font-size:11px;padding:4px 10px">Vybrat vše</button>' +
+                '<button class="btn btn-s" onclick="pdfSelAllStd(false)" style="font-size:11px;padding:4px 10px">Zrušit výběr</button>' +
+                '</div>' +
+                '<div class="pdf-sheets-grid">' + cbs + '</div>' +
+                '</div></div>' +
+
+                /* Karta: Nastavení */
+                '<div class="pdf-card">' +
+                '<div class="pdf-card-bar"></div>' +
+                '<div class="pdf-card-body">' +
+                '<div class="kt-sec-lbl">Nastavení tisku</div>' +
+                '<div class="pdf-two-col" style="margin-bottom:12px">' +
+                '<div class="fg"><div class="fg-label">Velikost papíru</div>' +
+                '<div class="rgroup" style="margin-top:6px">' + radio('pSize', 'A4', 'A4', true) + radio('pSize', 'A3', 'A3', false) + '</div></div>' +
+                '<div class="fg"><div class="fg-label">Orientace</div>' +
+                '<div class="rgroup" style="margin-top:6px">' + radio('pOr', 'portrait', 'Na výšku', true) + radio('pOr', 'landscape', 'Na šířku', false) + '</div></div>' +
+                '</div>' +
+                '<div class="kt-sec-lbl">Možnosti</div>' +
+                '<div style="display:flex;gap:20px;margin-bottom:12px">' +
+                toggle('fPGrid', 'Zobrazit mřížku', false) +
+                toggle('fPNum', 'Čísla stránek', true) +
+                '</div>' +
+                '<div class="fg" style="margin-bottom:0">' +
+                '<div class="fg-label">Název souboru <span style="font-weight:400;color:var(--t3)">(volitelné)</span></div>' +
+                '<input class="fg-input" type="text" id="fPdfName" placeholder="Automaticky z názvu tabulky">' +
+                '</div>' +
+                '</div></div>' +
+
+                '<div id="pdfRes"></div>' +
+                '</div>';
+
+            var fBtns = document.getElementById('fBtns');
+            if (fBtns) {
+                fBtns.innerHTML = '<button class="btn btn-p" onclick="execStandardPDF()">Generovat PDF</button>' +
+                    '<button class="btn btn-s" onclick="go(\'home\')">Zrušit</button>';
+            }
+
+        } else {
+            // ============================================
+            // REŽIM DÁVKA (BATCH)
+            // ============================================
+            var lcOptions = '<option value="">Všechna LC (všechny filiálky)</option>';
+            d.lcs.forEach(function (lc) {
+                var isSel = (d.activeLcId && String(lc.id) === String(d.activeLcId)) ? ' selected' : '';
+                lcOptions += '<option value="' + esc(lc.id) + '"' + isSel + '>' + esc(lc.id) + ' - ' + esc(lc.name) + '</option>';
+            });
+
+            var sheetOptions = '';
+            d.sheets.forEach(function (s) {
+                var isSel = (s.toLowerCase() === 'test pdf') ? ' selected' : '';
+                sheetOptions += '<option value="' + esc(s) + '"' + isSel + '>' + esc(s) + '</option>';
+            });
+
+            var autoName = S.data.ktAutoFolderName || 'Kořen Drive';
+            if (d.targetFolderId) autoName = d.targetFolderName ? d.targetFolderName : 'Vlastní složka';
+
+            m.innerHTML =
+                '<div class="pdf-wrap">' +
+                modeHtml +
+
+                /* Karta: Zdrojová data */
+                '<div class="pdf-card">' +
+                '<div class="pdf-card-bar"></div>' +
+                '<div class="pdf-card-body">' +
+                '<div class="kt-sec-lbl">Zdrojová data a cíl</div>' +
+                '<div class="pdf-two-col" style="margin-bottom:10px">' +
+                '<div class="fg"><div class="fg-label">Logistické centrum (LC)</div>' +
+                '<select id="fPdfLc" class="fg-select" onchange="pdfFilterBranches()">' + lcOptions + '</select></div>' +
+                '<div class="fg"><div class="fg-label">Cílová složka</div>' +
+                '<div class="pdf-folder-info"><span>📂</span><strong>' + esc(autoName) + '</strong>' +
+                (d.targetFolderId ? '<span class="pdf-folder-id">' + esc(d.targetFolderId) + '</span>' : '') +
+                '</div></div>' +
+                '</div>' +
+                '<div class="pdf-count-row">' +
+                '<div style="display:flex;align-items:center;gap:8px">' +
+                '<span class="kt-sec-lbl" style="margin:0">Filiálky</span>' +
+                '<span id="pdfBsCount" class="pdf-count-badge">0 / 0</span>' +
+                '</div>' +
+                '<div class="pdf-sel-links">' +
+                '<a href="#" onclick="pdfSelAll(true);return false">Vybrat vše</a>' +
+                ' &nbsp;|&nbsp; ' +
+                '<a href="#" onclick="pdfSelAll(false);return false">Odznačit vše</a>' +
+                '</div>' +
+                '</div>' +
+                '<input type="text" id="fPdfSearch" class="fg-input" placeholder="🔍 Hledat podle čísla nebo názvu..." onkeyup="pdfFilterBranches()" style="font-size:12px">' +
+                '<div id="pdfBranchesList" class="pdf-branches-wrap"></div>' +
+                '</div></div>' +
+
+                /* Spodní karty: 2 sloupce */
+                '<div class="pdf-batch-bottom">' +
+
+                /* Karta: Nastavení tisku */
+                '<div class="pdf-card">' +
+                '<div class="pdf-card-bar"></div>' +
+                '<div class="pdf-card-body">' +
+                '<div class="kt-sec-lbl">Nastavení tisku</div>' +
+                '<div class="pdf-two-col">' +
+                '<div class="fg"><div class="fg-label">Šablonový list</div><select id="fPdfSheet" class="fg-select">' + sheetOptions + '</select></div>' +
+                '<div class="fg"><div class="fg-label">Buňka ID</div><input type="text" id="fPdfCell" class="fg-input" placeholder="např. C8" value="C8"></div>' +
+                '<div class="fg"><div class="fg-label">Rozsah tisku</div><input type="text" id="fPdfRange" class="fg-input" placeholder="např. A1:G50" value="A1:G50"></div>' +
+                '<div class="fg"><div class="fg-label">Orientace</div><select id="fPdfOr" class="fg-select"><option value="portrait">Na výšku (P)</option><option value="landscape">Na šířku (L)</option></select></div>' +
+                '</div>' +
+                '</div></div>' +
+
+                /* Karta: Názvy souborů */
+                '<div class="pdf-card">' +
+                '<div class="pdf-card-bar"></div>' +
+                '<div class="pdf-card-body">' +
+                '<div class="kt-sec-lbl">Názvy výstupních souborů</div>' +
+                '<div class="pdf-two-col">' +
+                '<div class="fg"><div class="fg-label">Prefix</div><input type="text" id="fPdfPrefix" class="fg-input" placeholder="Např. Report_"></div>' +
+                '<div class="fg"><div class="fg-label">Suffix</div><input type="text" id="fPdfSuffix" class="fg-input" placeholder="Např. _v1"></div>' +
+                '</div>' +
+                '<div class="fg" style="margin-top:2px;margin-bottom:0">' +
+                '<div class="fg-label">Základ <span style="font-weight:400;color:var(--t3)">(tagy: {id}, {name})</span></div>' +
+                '<input type="text" id="fPdfBase" class="fg-input" value="Filiálka_{id}">' +
+                '</div>' +
+                '</div></div>' +
+
+                '</div>' + /* end pdf-batch-bottom */
+
+                '<div id="pdfRes"></div>' +
+                '</div>';
+
+            var fBtns = document.getElementById('fBtns');
+            if (fBtns) {
+                fBtns.innerHTML = '<button class="btn btn-p" onclick="execBatchPDF()">Generovat PDF</button>' +
+                    '<button class="btn btn-s" onclick="go(\'home\')">Zrušit</button>';
+            }
+            pdfFilterBranches();
+        }
+    }
+
+    // --- STANDARD MODE HELPERS ---
+    function pdfSelAllStd(v) { document.querySelectorAll('.sCb').forEach(function (c) { c.checked = v; }); }
+
+    function execStandardPDF() {
+        var names = [];
+        document.querySelectorAll('.sCb:checked').forEach(function (c) { names.push(c.value); });
+        if (names.length === 0) { alert('Vyberte alespoň jeden list'); return; }
+
+        var opts = {
+            size: document.querySelector('input[name="pSize"]:checked').value,
+            portrait: document.querySelector('input[name="pOr"]:checked').value === 'portrait',
+            gridlines: isOn('fPGrid'),
+            pageNumbers: isOn('fPNum'),
+            fileName: document.getElementById('fPdfName').value.trim() || undefined
+        };
+
+        setBusy(true);
+        setProgress(10, 'Generuji PDF...');
+
+        google.script.run
+            .withSuccessHandler(function (r) {
+                setBusy(false);
+                if (r.success) {
+                    setProgress(100, 'PDF vytvořeno');
+                    showResult('PDF vygenerováno', '✅ Soubor byl úspěšně vytvořen a uložen na Google Drive.', '📄');
+                    setTimeout(function () { setProgress(0, ''); }, 3000);
+                } else {
+                    setProgress(0, '');
+                    showResult('Chyba generování', 'Došlo k chybě při vytváření PDF:<br>' + esc(r.error), '❌');
+                }
+            })
+            .withFailureHandler(function (e) { setBusy(false); setProgress(0, ''); onErr(e); })
+            .modulePDF_export(names, opts);
+    }
+
+    // --- BATCH MODE HELPERS ---
+    function pdfFilterBranches() {
+        var lcFilter = document.getElementById('fPdfLc').value;
+        var searchPattern = document.getElementById('fPdfSearch').value.toLowerCase().trim();
+        var wrap = document.getElementById('pdfBranchesList');
+        if (!wrap) return;
+
+        var html = '';
+        var count = 0;
+        var total = S.pdfData.branches.length;
+
+        S.pdfData.branches.forEach(function (b) {
+            // Filtr LC
+            if (lcFilter && b.lcId !== lcFilter) return;
+            // Filtr text
+            var fullText = (b.id + ' ' + b.name).toLowerCase();
+            if (searchPattern && fullText.indexOf(searchPattern) === -1) return;
+
+            count++;
+            html += '<label class="cbox" style="padding:4px 8px;border-bottom:1px solid #f1f5f9;margin:0;display:flex;align-items:center;gap:12px">' +
+                '<input type="checkbox" class="bCb" value="' + esc(b.id) + '" data-name="' + esc(b.name) + '" checked>' +
+                '<span style="font-family:var(--mono);font-weight:600;color:var(--blue);width:45px">' + esc(b.id) + '</span>' +
+                '<span style="color:var(--t1);font-size:11px;flex:1">' + esc(b.name) + '</span>' +
+                '</label>';
+        });
+
+        if (count === 0) {
+            html = '<div style="padding:20px;text-align:center;color:var(--t3);font-size:12px">Žádné filiálky neodpovídají filtru</div>';
+        }
+
+        wrap.innerHTML = html;
+        var cEl = document.getElementById('pdfBsCount');
+        if (cEl) cEl.textContent = count + ' / ' + total;
+    }
+
+    function pdfSelAll(checked) {
+        document.querySelectorAll('.bCb').forEach(function (c) { c.checked = checked; });
+    }
+
+    function execBatchPDF() {
+        if (S.busy) return;
+
+        // Získáme vybrané pobočky
+        var selected = [];
+        document.querySelectorAll('.bCb:checked').forEach(function (cb) {
+            selected.push({
+                id: cb.value,
+                name: cb.dataset.name
+            });
+        });
+
+        if (selected.length === 0) {
+            alert('Vyberte alespoň jednu filiálku pro tisk.');
+            return;
+        }
+
+        var opts = {
+            sheetName: document.getElementById('fPdfSheet').value,
+            cellId: document.getElementById('fPdfCell').value.trim(),
+            rangeId: document.getElementById('fPdfRange').value.trim(),
+            portrait: document.getElementById('fPdfOr').value === 'portrait',
+            prefix: document.getElementById('fPdfPrefix').value.trim(),
+            base: document.getElementById('fPdfBase').value.trim(),
+            suffix: document.getElementById('fPdfSuffix').value.trim()
+        };
+
+        if (!opts.sheetName || !opts.cellId || !opts.rangeId) {
+            alert('Vyplňte Šablonový list, Buňku a Rozsah.');
+            return;
+        }
+
+        setBusy(true);
+        setProgress(5, 'Spouštím dávkové generování...');
+
+        google.script.run
+            .withSuccessHandler(function (r) {
+                setBusy(false);
+                if (r.success) {
+                    setProgress(100, 'Dokončeno (' + r.count + ')');
+                    showResult('PDF vygenerována', '✅ Hromadný export ' + r.count + ' souborů byl úspěšně dokončen a uložen na Google Drive.', '📄');
+                    setTimeout(function () { setProgress(0, ''); }, 3000);
+                } else {
+                    setProgress(0, '');
+                    showResult('Chyba generování', 'Došlo k chybě při vytváření PDF:<br>' + esc(r.error), '❌');
+                }
+            })
+            .withFailureHandler(function (e) { setBusy(false); setProgress(0, ''); onErr(e); })
+            .modulePDF_exportBatch(selected, opts);
+    }
+</script>

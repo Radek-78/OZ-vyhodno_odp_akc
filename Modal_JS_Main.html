@@ -1,0 +1,417 @@
+<script>
+    /* ═══════════════════════════════════════════
+       STATE
+       ═══════════════════════════════════════════ */
+    var S = {
+        mod: 'home',
+        logIdx: 0,
+        busy: false,
+        initDone: false,
+        data: {}
+    };
+
+    /* ═══════════════════════════════════════════
+       INIT
+       ═══════════════════════════════════════════ */
+    // Animace kroků při inicializaci — cykluje předdefinované kroky na splash obrazovce.
+    // Spolehlivější než polling (oba google.script.run mohou běžet sériově).
+    var _initSteps = [
+        'Ověřuji přihlášeného uživatele...',
+        'Připojuji se k tabulce...',
+        'Načítám konfiguraci...',
+        'Zjišťuji listy tabulky...',
+        'Připravuji rozhraní...'
+    ];
+    var _initIdx = 0, _initTimer = null;
+    function _nextInitStep() {
+        if (!S.initing || _initIdx >= _initSteps.length) return;
+        var el = document.getElementById('loaderText');
+        if (el) el.textContent = _initSteps[_initIdx++];
+        _initTimer = setTimeout(_nextInitStep, 700);
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Blur na start
+        document.getElementById('app').classList.add('is-loading');
+        S.initing = true;
+
+        // Spustit animaci kroků po krátkém delay (loader musí být viditelný)
+        _initTimer = setTimeout(_nextInitStep, 150);
+
+        try {
+            var im = window.APP_CONFIG.initialModule;
+            if (im && im !== '' && im.indexOf('?') === -1) S.mod = im;
+        } catch (e) { }
+
+        google.script.run
+            .withSuccessHandler(onInit)
+            .withFailureHandler(onErr)
+            .ui_getInitialData();
+
+        // Vyčistit log box na klientovi hned na startu
+        var lb = document.getElementById('logbox');
+        if (lb) lb.innerHTML = '';
+        S.logIdx = 0;
+
+        // Start polling logs immediately to show init sequence
+        pollLogs();
+
+        // Load Google Picker API
+        if (typeof gapi !== 'undefined') {
+            gapi.load('picker', { 'callback': function () { S.pickerLoaded = true; } });
+        }
+    });
+
+    function onInit(d) {
+        d = d || {};
+        S.data = d;
+        S.initDone = true;
+        S.initing = false;
+        if (_initTimer) { clearTimeout(_initTimer); _initTimer = null; }
+
+        // Skrýt spinner — data jsou načtena, ale UI zůstává neaktivní do načtení loga
+        document.getElementById('loader').classList.add('hidden');
+
+        // Logo se načítá asynchronně — is-loading (blur + blokace) se odstraní až po jeho načtení
+        google.script.run
+            .withSuccessHandler(function (chunks) {
+                if (chunks && chunks.length > 0) {
+                    var logoImg = document.getElementById('logo');
+                    var logoPlaceholder = document.getElementById('logo-placeholder');
+                    if (logoImg) {
+                        logoImg.src = chunks.join('');
+                        logoImg.style.display = 'block';
+                        if (logoPlaceholder) logoPlaceholder.style.display = 'none';
+                    }
+                }
+                // Logo načteno — zapsat zprávu o připravenosti; UI se odblokuje až když ji klient přijme
+                S.waitingForReady = true;
+                google.script.run.appLog_log('✅ Vše je připraveno', 'ok');
+            })
+            .withFailureHandler(function () {
+                // Při chybě loga také zapsat zprávu a počkat na její přijetí
+                S.waitingForReady = true;
+                google.script.run.appLog_log('✅ Vše je připraveno', 'ok');
+            })
+            .ui_getLogoChunks();
+
+        setBusy(false);
+        // Verze + email + název
+        var cfg = d.config || {};
+        document.getElementById('appname').textContent = cfg.appName || 'Vyhodnocení odpisů akčních artiklů';
+        document.getElementById('ver').textContent = 'v' + (d.version || '1.0.0');
+        document.getElementById('email').textContent = d.userEmail || '';
+
+        // Zobrazení výchozího LC v hlavičce
+        var lcEl = document.getElementById('lcname');
+        if (lcEl) {
+            S.showLcInHeader = d.showLcInHeader;
+            if (d.showLcInHeader) {
+                lcEl.style.display = 'block';
+                lcEl.textContent = d.activeLcName ? "LC " + d.activeLcName : "bez výběru LC";
+            } else {
+                lcEl.style.display = 'none';
+            }
+        }
+
+        // Pokud startujeme v modulu, vymažeme inicializační log
+        if (S.mod !== 'home' && S.mod !== 'help' && S.mod !== 'changelog') {
+            clearLogs('Modul ' + (MODS[S.mod]?.t || S.mod) + ' aktivní');
+        }
+
+        go(S.mod);
+    }
+
+    /* ═══════════════════════════════════════════
+       LOG POLLING
+       ═══════════════════════════════════════════ */
+    /** Polling interval: kratší při aktivní operaci nebo initu, delší v idle */
+    function _pollInterval() {
+        return (S.busy || S.initing) ? 800 : 3000;
+    }
+
+    var _pollActive = true;
+
+    /** Zastaví log polling (voláno při zavření nebo destrukci modalu) */
+    function stopPolling() {
+        _pollActive = false;
+    }
+
+    function pollLogs() {
+        if (!_pollActive) return;
+        google.script.run
+            .withSuccessHandler(function (r) {
+                onLogs(r);
+                if (_pollActive) setTimeout(pollLogs, _pollInterval());
+            })
+            .withFailureHandler(function () {
+                if (_pollActive) setTimeout(pollLogs, 5000);
+            })
+            .appLog_getMessagesSince(S.logIdx);
+    }
+
+    function onLogs(r) {
+        if (!r) return;
+
+        // Pokud server cache byla smazána a znovu naplněna (total < logIdx),
+        // resetujeme index — jinak by slice(logIdx) vrátil prázdné pole
+        // a nové zprávy z modulů by se nikdy nezobrazily.
+        if (r.total < S.logIdx) {
+            S.logIdx = 0;
+        }
+
+        if (!r.messages || r.messages.length === 0) return;
+
+        // Odblokovat UI přesně ve chvíli kdy klient přijme zprávu o připravenosti
+        if (S.waitingForReady) {
+            S.waitingForReady = false;
+            document.getElementById('app').classList.remove('is-loading');
+        }
+
+        var box = document.getElementById('logbox');
+
+        r.messages.forEach(function (m) {
+            var el = document.createElement('div');
+            el.className = 'll';
+            el.innerHTML = '<span class="ll-t">[' + esc(m.time) + ']</span><span class="ll-m ' + esc(m.level) + '">' + esc(m.message) + '</span>';
+            box.appendChild(el);
+        });
+
+        // Kurzor na konec
+        var cur = box.querySelector('.cursor');
+        if (cur) cur.remove();
+        var last = box.lastElementChild;
+        if (last) {
+            var msgSpan = last.querySelector('.ll-m');
+            if (msgSpan) msgSpan.innerHTML += '<span class="cursor"></span>';
+        }
+
+        S.logIdx = r.total;
+        box.scrollTop = box.scrollHeight;
+    }
+
+    /**
+     * Vymaže log na klientovi i na serveru
+     */
+    function clearLogs(msg) {
+        var box = document.getElementById('logbox');
+        box.innerHTML = '';
+        S.logIdx = 0;
+
+        // Pokud je zadána zpráva, napíšeme ji jako první po vymazání
+        if (msg) {
+            var el = document.createElement('div');
+            el.className = 'll';
+            el.innerHTML = '<span class="ll-t">[' + Utils.formatTime(new Date()) + ']</span><span class="ll-m info">' + esc(msg) + '<span class="cursor"></span></span>';
+            box.appendChild(el);
+        }
+
+        // Vymazat i v cache na serveru
+        google.script.run.appLog_clear();
+    }
+
+    /* ═══════════════════════════════════════════
+       MODULE SWITCHING
+       ═══════════════════════════════════════════ */
+    var MODS = {
+        home: { i: '🏠', t: 'Řídicí panel', s: 'Vyberte modul' },
+        kt: { i: '📅', t: 'Nový KT soubor', s: 'Vytvoření nového kalendářního týdne' },
+        import: { i: '📥', t: 'Import souborů', s: 'Import dat z XLSX / CSV' },
+        pdf: { i: '📄', t: 'Generování PDF', s: 'Export listů do PDF' },
+        help: { i: '📖', t: 'Nápověda', s: 'Průvodce používáním' },
+        changelog: { i: '📋', t: 'Changelog', s: 'Historie změn' },
+        settings: { i: '⚙️', t: 'Nastavení', s: 'Konfigurace aplikace' }
+    };
+
+    function go(mod) {
+        if (!S.initDone && mod !== 'home' && mod !== 'help' && mod !== 'changelog') {
+            var m = document.getElementById('main');
+            m.innerHTML = '<div style="padding:100px;text-align:center;color:var(--t3);font-size:14px">⌛ Inicializace systému, prosím čekejte...</div>';
+            return;
+        }
+
+        // Cleanup předchozího modulu (KT countdown, budoucí cleanup hooks)
+        if (typeof _ktCountdown !== 'undefined' && _ktCountdown) {
+            clearInterval(_ktCountdown);
+            _ktCountdown = null;
+        }
+
+        // Při přepnutí na modul (mimo domů a nápovědu) vymažeme logy inicializace
+        if (mod !== 'home' && mod !== 'help' && mod !== 'changelog') {
+            clearLogs('Modul ' + (MODS[mod]?.t || mod) + ' aktivní');
+        }
+
+        S.mod = mod;
+        var c = MODS[mod] || MODS.home;
+        document.getElementById('hIcon').textContent = c.i;
+        document.getElementById('hTitle').textContent = c.t;
+        document.getElementById('hSub').textContent = c.s;
+        document.getElementById('hBack').style.display = mod === 'home' ? 'none' : 'inline-block';
+
+        var m = document.getElementById('main');
+        m.scrollTop = 0;
+        m.style.display = '';
+        m.style.flexDirection = '';
+
+        var fBtns = document.getElementById('fBtns');
+        if (fBtns) fBtns.innerHTML = '';
+
+        switch (mod) {
+            case 'home': vHome(m); break;
+            case 'kt': vKT(m); break;
+            case 'import': vImport(m); break;
+            case 'pdf': vPDF(m); break;
+            case 'help': vHelp(m); break;
+            case 'changelog': vChangelog(m); break;
+            case 'settings': vSettings(m); break;
+            default: vHome(m);
+        }
+    }
+
+    /* ═══════════════════════════════════════════
+       HOME
+       ═══════════════════════════════════════════ */
+    function vHome(m) {
+        m.style.display = 'flex';
+        m.style.flexDirection = 'column';
+        m.innerHTML =
+            '<div class="mgrid">' +
+            card('kt', '📅', 'Nový KT soubor', 't-blue', 'Nový projekt', 'Vytvoření nového souboru zkopírováním šablony pro kalendářní týden.', 'c-blue') +
+            card('import', '📥', 'Import souborů', 't-green', 'Data', 'Import XLSX nebo CSV souborů s průběžným logováním.', 'c-green') +
+            card('pdf', '📄', 'Generování PDF', 't-red', 'Export', 'Export vybraných listů do PDF s nastavením layoutu.', 'c-red') +
+            '</div>' +
+            '<div style="flex:1"></div>' +
+            '<div class="xsep"><div class="xsep-label">Další nástroje</div>' +
+            '<div class="xrow">' +
+            '<button class="xbtn" onclick="go(\'help\')"><span>📖</span>Nápověda</button>' +
+            '<button class="xbtn" onclick="go(\'changelog\')"><span>📋</span>Changelog</button>' +
+            '<button class="xbtn" onclick="go(\'settings\')"><span>⚙️</span>Nastavení</button>' +
+            '</div></div>';
+    }
+
+    function card(mod, ico, title, tagCls, tag, desc, borderCls) {
+        return '<div class="mcard ' + borderCls + '" onclick="go(\'' + mod + '\')">' +
+            '<div class="mcard-head">' +
+            '<div class="mcard-ico-wrap">' + ico + '</div>' +
+            '<div class="mcard-arr">→</div>' +
+            '</div>' +
+            '<div class="mcard-title">' + title + '</div>' +
+            '<div class="mcard-desc">' + desc + '</div>' +
+            '</div>';
+    }
+
+    /* ═══════════════════════════════════════════
+       UTILITY — UI HELPERS
+       ═══════════════════════════════════════════ */
+    var isMinimized = false;
+    function toggleMinimize() {
+        isMinimized = !isMinimized;
+        var app = document.getElementById('app');
+        var btn = document.getElementById('hMin');
+
+        if (isMinimized) {
+            google.script.host.setHeight(65);
+            if (btn) btn.innerHTML = '□ Rozbalit';
+            app.classList.add('minimized');
+        } else {
+            google.script.host.setHeight(800);
+            if (btn) btn.innerHTML = '_ Sbalit';
+            app.classList.remove('minimized');
+        }
+    }
+
+    function fg(label, inner) {
+        return '<div class="fg"><div class="fg-label">' + label + '</div>' + inner + '</div>';
+    }
+
+    function toggle(id, label, on) {
+        return '<div class="tgl">' +
+            '<div class="tgl-track' + (on ? ' on' : '') + '" id="' + id + '" onclick="tglClick(this)"></div>' +
+            '<div class="tgl-label">' + label + '</div></div>';
+    }
+
+    function radio(name, value, label, checked) {
+        return '<label class="ritem"><input type="radio" name="' + name + '" value="' + value + '"' + (checked ? ' checked' : '') + '><span>' + label + '</span></label>';
+    }
+
+    function tglClick(el) { el.classList.toggle('on'); }
+    function isOn(id) { return document.getElementById(id).classList.contains('on'); }
+
+    /* ═══════════════════════════════════════════
+       STATUS / PROGRESS / ERROR
+       ═══════════════════════════════════════════ */
+    function setBusy(v) {
+        S.busy = v;
+        var dot = document.getElementById('sDot');
+        var txt = document.getElementById('sTxt');
+        dot.className = v ? 'fl-dot proc' : 'fl-dot ready';
+        txt.textContent = v ? 'Zpracování...' : 'Připraveno';
+        document.querySelectorAll('.btn').forEach(function (b) { b.disabled = v; });
+    }
+
+    /**
+     * Show/hide premium loader overlay for UI-blocking tasks
+     */
+    function setLoading(show, title, sub) {
+        var loader = document.getElementById('loader');
+        var app = document.getElementById('app');
+        if (show) {
+            document.getElementById('loaderText').textContent = title || 'Načítání...';
+            document.getElementById('loaderSub').textContent = sub || 'Prosím čekejte';
+            loader.classList.remove('hidden');
+            app.classList.add('is-loading');
+        } else {
+            loader.classList.add('hidden');
+            app.classList.remove('is-loading');
+        }
+    }
+
+    function setProgress(pct, label) {
+        var bar = document.getElementById('pBar');
+        var lbl = document.getElementById('pLabel');
+        var pctEl = document.getElementById('pPct');
+
+        if (pct > 0) {
+            bar.style.width = pct + '%';
+            bar.className = pct < 100 ? 'fr-fill anim' : 'fr-fill';
+            lbl.textContent = label || 'Zpracování';
+            pctEl.textContent = Math.round(pct) + ' %';
+        } else {
+            bar.style.width = '0%';
+            bar.className = 'fr-fill';
+            lbl.textContent = '—';
+            pctEl.textContent = '';
+        }
+    }
+
+    function onErr(e) {
+        setBusy(false);
+        setProgress(0, '');
+        var dot = document.getElementById('sDot');
+        var txt = document.getElementById('sTxt');
+        dot.className = 'fl-dot err';
+        txt.textContent = 'Chyba';
+
+        var errMsg = (e && e.message) ? e.message : String(e);
+        console.error('Apps Script Error:', e);
+
+        showResult('Chyba systému', 'Omlouváme se, ale při komunikaci se serverem došlo k chybě:<br><br><span style="color:var(--red);font-family:var(--mono);font-size:11px">' + esc(errMsg) + '</span>', '❌');
+
+        // Zápis chyby i do logu pro uživatele
+        var box = document.getElementById('logbox');
+        if (box) {
+            var el = document.createElement('div');
+            el.className = 'll';
+            el.innerHTML = '<span class="ll-t">[' + Utils.formatTime(new Date()) + ']</span><span class="ll-m error">TRANSPORT ERROR: ' + esc(errMsg) + '</span>';
+            box.appendChild(el);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        setTimeout(function () {
+            if (dot.className === 'fl-dot err') {
+                dot.className = 'fl-dot ready';
+                txt.textContent = 'Připraveno';
+            }
+        }, 5000);
+    }
+</script>

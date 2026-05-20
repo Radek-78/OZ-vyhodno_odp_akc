@@ -1,0 +1,112 @@
+<script>
+    /* ═══════════════════════════════════════════
+       HELP MODULE
+       ═══════════════════════════════════════════ */
+    function vHelp(m) {
+        m.innerHTML = '<div style="color:var(--t3);font-size:12px">Načítání nápovědy...</div>';
+
+        google.script.run
+            .withSuccessHandler(function (sections) {
+                var html = '';
+                sections.forEach(function (s, i) {
+                    html += '<div class="acc-item" id="acc' + i + '">' +
+                        '<div class="acc-hd" onclick="accTgl(' + i + ')">' +
+                        '<span>' + esc(s.title) + '</span><span class="acc-arr">▼</span>' +
+                        '</div>' +
+                        '<div class="acc-body"><div class="acc-body-inner">' + esc(s.content) + '</div></div></div>';
+                });
+                m.innerHTML = html;
+            })
+            .withFailureHandler(onErr)
+            .moduleHelp_getContent();
+    }
+
+    function accTgl(i) {
+        var el = document.getElementById('acc' + i);
+        var body = el.querySelector('.acc-body');
+        var inner = el.querySelector('.acc-body-inner');
+        var open = el.classList.contains('open');
+
+        // Zavřít vše
+        document.querySelectorAll('.acc-item').forEach(function (a) {
+            a.classList.remove('open');
+            a.querySelector('.acc-body').style.maxHeight = '0';
+        });
+
+        if (!open) {
+            el.classList.add('open');
+            body.style.maxHeight = (inner.scrollHeight + 20) + 'px';
+        }
+    }
+
+    /* ═══════════════════════════════════════════
+       CHANGELOG MODULE
+       ═══════════════════════════════════════════ */
+    function vChangelog(m) {
+        m.innerHTML = '<div style="color:var(--t3);font-size:12px">Načítání...</div>';
+
+        google.script.run
+            .withSuccessHandler(function (d) {
+                d = d || {};
+                var entries = d.entries || [];
+                var vStr = d.version || S.data.version || '?';
+
+                // Synchronizace verze v hlavičce aplikace
+                var verEl = document.getElementById('ver');
+                if (verEl) verEl.textContent = 'v' + vStr;
+                S.data.version = vStr; // Aktualizace globálního stavu v klientovi
+
+                var html = '<div class="cl-head"><div class="cl-ver">v' + esc(vStr) + '</div>' +
+                    '<button class="btn btn-p" onclick="clFormShow()">+ Přidat záznam</button></div>';
+
+                if (d.error) {
+                    html += '<div style="margin-bottom:12px;padding:10px;background:#fef2f2;border:1px solid #fee2e2;border-radius:6px;color:var(--red);font-size:12px"><strong>Chyba:</strong> ' + esc(d.error) + '</div>';
+                }
+
+                html += '<div id="clForm" class="hidden" style="margin-bottom:16px">' +
+                    '<div style="padding:14px 16px;border:1px solid var(--border);border-radius:8px;background:var(--card)">' +
+                    fg('Typ změny', '<select class="fg-select" id="clType"><option value="patch">Patch — oprava</option><option value="minor">Minor — nová funkce</option><option value="major">Major — zásadní změna</option></select>') +
+                    fg('Popis', '<textarea class="fg-textarea" id="clDesc" placeholder="Co se změnilo..."></textarea>') +
+                    '<div class="fg-actions"><button class="btn btn-p" onclick="clAdd()">Přidat</button><button class="btn btn-s" onclick="clFormHide()">Zrušit</button></div>' +
+                    '</div></div>';
+
+                if (entries.length === 0) {
+                    html += '<div style="text-align:center;padding:30px;color:var(--t3);font-size:12px">Žádné záznamy</div>';
+                } else {
+                    entries.forEach(function (e) {
+                        html += '<div class="cl-entry"><div class="cl-entry-hd">' +
+                            '<span class="cl-date">' + esc(e.date) + '</span>' +
+                            '<span class="cl-type ' + esc(e.type) + '">' + esc(e.type) + '</span></div>' +
+                            '<div class="cl-desc">' + esc(e.description) + '</div>' +
+                            '<div class="cl-author">' + esc(e.author) + '</div></div>';
+                    });
+                }
+
+                m.innerHTML = html;
+            })
+            .withFailureHandler(onErr)
+            .moduleChangelog_getData();
+    }
+
+    function clFormShow() { document.getElementById('clForm').classList.remove('hidden'); }
+    function clFormHide() { document.getElementById('clForm').classList.add('hidden'); }
+
+    function clAdd() {
+        var type = document.getElementById('clType').value;
+        var desc = document.getElementById('clDesc').value.trim();
+        if (!desc) { alert('Zadejte popis změny'); return; }
+
+        setBusy(true);
+        google.script.run
+            .withSuccessHandler(function (r) {
+                setBusy(false);
+                if (r.success) {
+                    var headerVerEl = document.getElementById('ver');
+                    if (headerVerEl) headerVerEl.textContent = 'v' + r.newVersion;
+                    vChangelog(document.getElementById('main'));
+                }
+            })
+            .withFailureHandler(function (e) { setBusy(false); onErr(e); })
+            .moduleChangelog_addEntry(type, desc);
+    }
+</script>

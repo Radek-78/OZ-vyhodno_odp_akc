@@ -1,0 +1,49 @@
+<script>
+    /**
+     * Client-side utility functions.
+     */
+    var Utils = {
+        /**
+         * Escapes HTML to prevent XSS.
+         * Regex varianta — rychlejší než DOM createElement při častém volání.
+         * @param {string} s
+         * @return {string}
+         */
+        esc: function (s) {
+            if (s === null || s === undefined) return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        },
+
+        /**
+         * Simple client-side time formatter (HH:mm:ss).
+         * @param {Date} date
+         * @return {string}
+         */
+        formatTime: function (date) {
+            var h = String(date.getHours()).padStart(2, '0');
+            var m = String(date.getMinutes()).padStart(2, '0');
+            var s = String(date.getSeconds()).padStart(2, '0');
+            return h + ':' + m + ':' + s;
+        }
+    };
+
+    /** Alias for backward compatibility in the extracted code */
+    function esc(s) { return Utils.esc(s); }
+
+    /** Show premium result modal */
+    function showResult(title, body, icon) {
+        document.getElementById('resModalTitle').textContent = title || 'Hotovo';
+        document.getElementById('resModalBody').innerHTML = body || '';
+        document.getElementById('resModalIcon').textContent = icon || '✅';
+        document.getElementById('resModal').classList.add('active');
+    }
+
+    /** Close premium result modal */
+    function closeResModal() {
+        document.getElementById('resModal').classList.remove('active');
+    }
+</script>

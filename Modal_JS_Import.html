@@ -1,0 +1,781 @@
+<style>
+    /* ── Import Module — Enhanced UI ──────────────────────────────
+       Industrial Precision: tab switcher, tactile file trays,
+       yellow drag glow, monospace data labels, left-accent config cards
+    ─────────────────────────────────────────────────────────────── */
+
+    /* Tab-bar mode switcher */
+    .im-mode-grid {
+        display: flex;
+        gap: 3px;
+        margin-bottom: 16px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 3px;
+    }
+
+    .im-mode-card {
+        flex: 1;
+        padding: 8px 14px;
+        background: transparent;
+        border: none !important;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        transition: background .15s, box-shadow .15s;
+        box-shadow: none !important;
+    }
+
+    .im-mode-card:hover:not(.active) {
+        background: rgba(3, 78, 171, .06);
+        transform: none;
+    }
+
+    .im-mode-card.active {
+        background: var(--blue) !important;
+        box-shadow: 0 2px 8px rgba(3, 78, 171, .28) !important;
+    }
+
+    .im-mode-card.active .im-mode-title { color: #fff; }
+    .im-mode-card.active .im-mode-sub   { color: rgba(255,255,255,.65); }
+
+    .im-mode-icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        flex-shrink: 0;
+        background: rgba(3, 78, 171, .09);
+        transition: background .15s;
+    }
+
+    .im-mode-card.active .im-mode-icon {
+        background: rgba(255, 255, 255, .15);
+    }
+
+    /* ── File slots ── */
+    .im-slots {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .im-slot {
+        height: 110px;
+        border: 2px dashed #d0d8e8;
+        border-radius: 10px;
+        background: #fcfcfd;
+        background-image: repeating-linear-gradient(
+            -45deg,
+            transparent, transparent 7px,
+            rgba(3, 78, 171, .016) 7px, rgba(3, 78, 171, .016) 8px
+        );
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+        transition: border-color .15s, background-color .15s, box-shadow .15s, transform .12s;
+    }
+
+    .im-slot:hover:not(.filled) {
+        border-color: var(--blue-light);
+        background-color: #f5f9ff;
+    }
+
+    .im-slot.drag {
+        border-style: solid !important;
+        border-color: var(--yellow) !important;
+        background-color: rgba(255, 240, 1, .07) !important;
+        background-image: none !important;
+        box-shadow: 0 0 0 3px rgba(255, 240, 1, .35), inset 0 0 24px rgba(255, 240, 1, .05);
+        transform: scale(1.025);
+    }
+
+    .im-slot.filled {
+        border-style: solid;
+        border-color: var(--blue);
+        background: #eff6ff !important;
+        background-image: none !important;
+    }
+
+    .im-slot.filled:hover {
+        border-color: var(--blue-light);
+        background: #e5efff !important;
+    }
+
+    /* File-type badge (top-left corner) */
+    .im-slot-badge {
+        position: absolute;
+        top: 7px;
+        left: 7px;
+        background: var(--blue);
+        color: #fff;
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: .8px;
+        padding: 2px 5px 1px;
+        border-radius: 3px;
+        font-family: var(--mono);
+        text-transform: uppercase;
+        line-height: 1.5;
+    }
+
+    .im-slot-badge.ext-csv  { background: #059669; }
+    .im-slot-badge.ext-xls,
+    .im-slot-badge.ext-xlsx { background: var(--blue); }
+
+    /* Circular "+" ring in empty state */
+    .im-slot-plus-ring {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 2px solid rgba(3, 78, 171, .22);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        font-weight: 300;
+        color: rgba(3, 78, 171, .45);
+        margin-bottom: 5px;
+        transition: all .15s;
+    }
+
+    .im-slot:hover .im-slot-plus-ring {
+        border-color: var(--blue);
+        color: var(--blue);
+        background: rgba(3, 78, 171, .07);
+    }
+
+    .im-upload-txt {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--blue);
+        display: block;
+    }
+
+    /* Format hint under upload label */
+    .im-slot-hint {
+        font-size: 9px;
+        color: var(--t3);
+        letter-spacing: .4px;
+        margin-top: 3px;
+        display: block;
+        font-family: var(--mono);
+        font-weight: 500;
+    }
+
+    /* Numbered step badge in top-left of slot */
+    .im-slot-num {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--blue);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font);
+        line-height: 1;
+        flex-shrink: 0;
+    }
+
+    .im-slot-icon { font-size: 26px; margin-bottom: 4px; }
+
+    /* Label below icon in empty state */
+    .im-slot-label {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--t1);
+        margin-bottom: 3px;
+        text-align: center;
+    }
+
+    /* "VYBRAT SOUBOR" link text */
+    .im-slot-link {
+        font-size: 9px;
+        font-weight: 800;
+        color: var(--blue);
+        letter-spacing: .6px;
+        text-transform: uppercase;
+    }
+
+    .im-slot-name {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--blue-deep);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 130px;
+        margin-top: 3px;
+        font-family: var(--mono);
+    }
+
+    .im-slot-remove {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: 18px;
+        height: 18px;
+        background: var(--red);
+        color: #fff;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 800;
+        cursor: pointer;
+        opacity: .65;
+        transition: opacity .15s;
+        z-index: 10;
+    }
+
+    .im-slot-remove:hover { opacity: 1; }
+
+    /* Always-present sub-row — reserves height before file is loaded */
+    .im-slot-sub {
+        height: 28px;
+        margin-top: 6px;
+        display: flex;
+        align-items: center;
+    }
+
+    .im-slot-sub .fg-input {
+        padding: 4px 8px;
+        font-size: 11px;
+        height: 28px;
+    }
+
+    .im-slot-sheet-label {
+        font-size: 10px;
+        color: var(--t2);
+        font-family: var(--mono);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        width: 100%;
+        text-align: center;
+    }
+
+    /* Config cards with left accent stripe */
+    .im-config-grid {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .im-config-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--blue);
+        border-radius: 0 10px 10px 0;
+        padding: 13px 14px;
+    }
+
+    .im-config-hd {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        padding-bottom: 7px;
+        border-bottom: 1px solid #f0f2f5;
+    }
+
+    .im-config-icon { font-size: 14px; }
+
+    .im-config-title {
+        font-size: 10px;
+        font-weight: 800;
+        color: var(--t2);
+        text-transform: uppercase;
+        letter-spacing: .5px;
+    }
+
+    /* ── Toggle rows (import-scoped) ── */
+    .im-tgl {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 7px 6px;
+        border-radius: 7px;
+        cursor: pointer;
+        transition: background .12s;
+        user-select: none;
+    }
+
+    .im-tgl + .im-tgl {
+        border-top: 1px solid #f3f4f6;
+    }
+
+    .im-tgl:hover {
+        background: rgba(3, 78, 171, .045);
+    }
+
+    .im-tgl-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .im-tgl-label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--t1);
+        line-height: 1.3;
+    }
+
+    .im-tgl-desc {
+        display: block;
+        font-size: 10px;
+        color: var(--t3);
+        margin-top: 1px;
+        line-height: 1.3;
+    }
+
+    /* Compact track inside toggle row */
+    .im-tgl .tgl-track {
+        width: 30px;
+        height: 17px;
+        border-radius: 9px;
+        flex-shrink: 0;
+    }
+
+    .im-tgl .tgl-track::after {
+        width: 13px;
+        height: 13px;
+    }
+
+    .im-tgl .tgl-track.on::after {
+        transform: translateX(13px);
+    }
+
+    /* Sheet count badge next to label */
+    .im-sheet-count {
+        font-size: 10px;
+        font-weight: 500;
+        color: var(--t3);
+        font-family: var(--mono);
+        margin-left: 4px;
+    }
+</style>
+
+<script>
+    /**
+     * 📥 MODUL IMPORT — NÁVRAT K PŮVODNÍMU VZHLEDU + NOVÝ STABILNÍ MOTOR
+     */
+    (function () {
+        if (!S._impSlots) S._impSlots = [{}, {}, {}];
+        if (!S._impMode) S._impMode = 'sheet';
+
+        // Konfigurace slotů — ikona, číslo a popis pro každý slot
+        var SLOT_CONFIGS = [
+            { num: 1, icon: '💰', label: 'Pokladní data' },
+            { num: 2, icon: '📊', label: 'MIS prodej' },
+            { num: 3, icon: '📋', label: 'FA' }
+        ];
+
+        // Full-width toggle row with label + description text
+        function imTgl(id, label, desc, on) {
+            return '<div class="im-tgl" onclick="tglClick(document.getElementById(\'' + id + '\'))">' +
+                '<div class="im-tgl-info">' +
+                '<span class="im-tgl-label">' + label + '</span>' +
+                (desc ? '<span class="im-tgl-desc">' + desc + '</span>' : '') +
+                '</div>' +
+                '<div class="tgl-track' + (on ? ' on' : '') + '" id="' + id + '"></div>' +
+                '</div>';
+        }
+
+        window.vImport = function (m) {
+            var slots = S._impSlots;
+            var sheets = S.data.sheets || [];
+
+            // ── Mode switcher (tab bar) ──
+            var html = '<div class="im-mode-grid">' +
+                '<div class="im-mode-card' + (S._impMode === 'sheet' ? ' active' : '') + '" onclick="imSetMode(\'sheet\')">' +
+                '<div class="im-mode-icon">📥</div>' +
+                '<div class="im-mode-body">' +
+                '<span class="im-mode-title">Sheet Import</span>' +
+                '<span class="im-mode-sub">Data ze souborů do aktivní tabulky</span>' +
+                '</div>' +
+                '</div>' +
+                '<div class="im-mode-card' + (S._impMode === 'drive' ? ' active' : '') + '" onclick="imSetMode(\'drive\')">' +
+                '<div class="im-mode-icon">📁</div>' +
+                '<div class="im-mode-body">' +
+                '<span class="im-mode-title">Drive Import</span>' +
+                '<span class="im-mode-sub">Kopírování souborů do Google Drive složky</span>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
+
+            // ── File slots ──
+            html += '<div class="im-slots">';
+            for (var i = 0; i < 3; i++) {
+                var s = slots[i];
+                var statusCls = s.status === 'ok' ? ' ok' : (s.status === 'loading' ? ' loading' : '');
+                var ext = s.name ? s.name.split('.').pop().toLowerCase() : '';
+                var extLabel = ext.toUpperCase();
+
+                html += '<div class="im-slot-wrap">';
+                html += '<div class="im-slot' + (s.name ? ' filled' : '') + statusCls + '" id="dz' + i + '" ' +
+                    'onclick="document.getElementById(\'fi' + i + '\').click()" ' +
+                    'ondragover="imDrag(event, true, ' + i + ')" ' +
+                    'ondragleave="imDrag(event, false, ' + i + ')" ' +
+                    'ondrop="imDrop(event, ' + i + ')">';
+
+                var cfg = SLOT_CONFIGS[i] || { num: i + 1, icon: '📄', label: 'Soubor ' + (i + 1) };
+                if (s.name) {
+                    // Filled: badge + icon + filename
+                    html += '<div class="im-slot-num">' + cfg.num + '</div>';
+                    html += '<div class="im-slot-remove" onclick="event.stopPropagation(); imClearSlot(' + i + ')">×</div>';
+                    html += '<div class="im-slot-badge ext-' + ext + '">' + esc(extLabel) + '</div>';
+                    html += '<div class="im-slot-icon">📄</div>';
+                    html += '<div class="im-slot-name">' + esc(s.name) + '</div>';
+                } else {
+                    // Empty: numbered badge + icon + label + link
+                    html += '<div class="im-slot-num">' + cfg.num + '</div>';
+                    html += '<div class="im-slot-icon">' + cfg.icon + '</div>';
+                    html += '<div class="im-slot-label">' + esc(cfg.label) + '</div>';
+                    html += '<div class="im-slot-link">Vybrat soubor</div>';
+                }
+
+                html += '<input type="file" id="fi' + i + '" hidden onchange="imHandleFile(this,' + i + ')">';
+                html += '</div>';
+
+                // Vždy rezervovat místo pro výběr listu — zabrání posunu layoutu
+                html += '<div class="im-slot-sub">';
+                if (s.sheetNames && s.sheetNames.length > 1) {
+                    html += '<select class="fg-input sm" onchange="imSetFileSheet(' + i + ', this.value)">' +
+                        s.sheetNames.map(function (sn, idx) {
+                            return '<option value="' + idx + '"' + (idx == s.sheetIdx ? ' selected' : '') + '>List: ' + esc(sn) + '</option>';
+                        }).join('') +
+                        '</select>';
+                } else if (s.sheetNames && s.sheetNames.length === 1) {
+                    html += '<span class="im-slot-sheet-label">📋 ' + esc(s.sheetNames[0]) + '</span>';
+                }
+                html += '</div>';
+
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // ── Config section ──
+            html += '<div class="im-config-grid" style="grid-template-columns:1fr 1fr">';
+            if (S._impMode === 'sheet') {
+                var firstSheet = sheets.length > 0 ? sheets[0].name : "";
+                var selectedSheet = S._impTargetSheet || firstSheet;
+                if (!S._impTargetSheet) S._impTargetSheet = selectedSheet;
+
+                var sheetCountHint = sheets.length > 0
+                    ? '<span class="im-sheet-count">(' + sheets.length + ')</span>'
+                    : '';
+
+                html += '<div class="im-config-card"><div class="im-config-hd"><span class="im-config-icon">🎯</span><span class="im-config-title">Cíl</span></div>' +
+                    '<div class="fg">' +
+                    '<div class="fg-label">Cílový list ' + sheetCountHint + '</div>' +
+                    '<select class="fg-input" id="fImpSheet">' +
+                    sheets.map(function (sh) {
+                        return '<option value="' + esc(sh.name) + '"' + (sh.name === selectedSheet ? ' selected' : '') + '>' + esc(sh.name) + '</option>';
+                    }).join('') +
+                    '<option value="__new__"' + (selectedSheet === '__new__' ? ' selected' : '') + '>+ Nový list...</option>' +
+                    '</select>' +
+                    '</div>' +
+                    '<div id="fImpNewWrap" style="margin-top:10px">' +
+                    fg('Název nového listu', '<input type="text" class="fg-input" id="fImpNew" value="' + esc(S._impNewSheetName || '') + '" ' + (selectedSheet === '__new__' ? '' : 'disabled') + '>') +
+                    '</div></div>';
+
+                html += '<div class="im-config-card"><div class="im-config-hd"><span class="im-config-icon">⚙️</span><span class="im-config-title">Parametry importu</span></div>' +
+                    imTgl('fImpClear', 'Přepsat data', 'Vymaže obsah listu před zápisem', true) +
+                    imTgl('fImpHeader', 'Záhlaví (1. řádek)', 'Tučné formátování prvního řádku', true) +
+                    imTgl('fImpSkipEmpty', 'Přeskočit prázdné řádky', 'Filtruje řádky bez hodnot', true) +
+                    imTgl('fImpTrimCols', 'Oříznout prázdné sloupce', 'Odstraní prázdné sloupce na konci', false) +
+                    '</div>';
+            } else {
+                html += '<div class="im-config-card"><div class="im-config-hd"><span class="im-config-icon">📂</span><span class="im-config-title">Cílová složka</span></div>' +
+                    fg('ID nebo URL složky', '<input type="text" class="fg-input" id="fImpFolder" placeholder="Vložte ID složky z Google Drive">') +
+                    '<div class="fg-hint">Prázdné = kořenová složka Drive</div>' +
+                    '</div>';
+                html += '<div class="im-config-card"><div class="im-config-hd"><span class="im-config-icon">🏷️</span><span class="im-config-title">Pojmenování souborů</span></div>' +
+                    fg('Prefix názvu', '<input type="text" class="fg-input" id="fImpPrefix" placeholder="Např. Import_">') +
+                    '<div class="fg-hint">Přidá se před původní název souboru</div>' +
+                    '</div>';
+            }
+            html += '</div>';
+
+            m.innerHTML = '<div class="form" style="max-width:none">' + html + '</div>';
+
+            var fBtns = document.getElementById('fBtns');
+            if (fBtns) {
+                fBtns.innerHTML = '<button class="btn btn-p" onclick="execImport()">📥 Spustit import</button>' +
+                    '<button class="btn btn-s" onclick="go(\'home\')">Zrušit</button>';
+            }
+
+            var sel = document.getElementById('fImpSheet');
+            if (sel) {
+                sel.onchange = function () {
+                    S._impTargetSheet = this.value;
+                    var inp = document.getElementById('fImpNew');
+                    if (this.value === '__new__') inp.disabled = false;
+                    else inp.disabled = true;
+                };
+            }
+            var inpNew = document.getElementById('fImpNew');
+            if (inpNew) {
+                inpNew.oninput = function () { S._impNewSheetName = this.value; };
+            }
+        };
+
+        window.imSetMode = function (m) { S._impMode = m; render(); };
+        window.imClearSlot = function (i) {
+            S._impSlots[i] = {};
+            var any = S._impSlots.some(function (s) { return s.name; });
+            if (!any) S._impNewSheetName = '';
+            render();
+        };
+        window.imDrag = function (e, over, i) {
+            e.preventDefault();
+            var el = document.getElementById('dz' + i);
+            if (over) el.classList.add('drag'); else el.classList.remove('drag');
+        };
+        window.imDrop = function (e, i) {
+            e.preventDefault();
+            document.getElementById('dz' + i).classList.remove('drag');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) imProcessFile(e.dataTransfer.files[0], i);
+        };
+        window.imHandleFile = function (el, i) {
+            if (el.files && el.files[0]) imProcessFile(el.files[0], i);
+        };
+        window.imSetFileSheet = function (slotIdx, sheetIdx) {
+            S._impSlots[slotIdx].sheetIdx = parseInt(sheetIdx);
+        };
+
+        async function imProcessFile(file, i) {
+            S._impSlots[i] = { file: file, name: file.name, status: 'loading' };
+            setLoading(true, 'Načítám listy...', file.name);
+            render();
+
+            try {
+                // Rychlé načtení struktury workbooku pro získání listů
+                var workbook = await readWorkbook(file);
+                S._impSlots[i].sheetNames = workbook.SheetNames;
+                S._impSlots[i].sheetIdx = 0;
+                S._impSlots[i].status = 'ok';
+
+                var baseName = file.name.split('.')[0].replace(/\s+/g, '_');
+                if (!S._impNewSheetName || S._impNewSheetName === '') {
+                    S._impNewSheetName = baseName;
+                }
+            } catch (e) {
+                S._impSlots[i].status = 'ok'; // Fallback
+                console.error('Chyba při parsování struktury:', e);
+            } finally {
+                setLoading(false);
+                render();
+            }
+        }
+
+        var AppLogger = {
+            log: function (m, l) { callServer('appLog_log', [m, l]); },
+            info: function (m) { this.log(m, 'info'); },
+            ok: function (m) { this.log(m, 'ok'); },
+            warn: function (m) { this.log(m, 'warn'); },
+            error: function (m) { this.log(m, 'error'); }
+        };
+
+        window.execImport = async function () {
+            if (S.busy) return;
+            var queue = S._impSlots.filter(s => s.file);
+            if (queue.length === 0) { alert('Vyberte alespoň jeden soubor.'); return; }
+
+            var mode = S._impMode;
+            var targetSheet = "";
+            if (mode === 'sheet') {
+                var sel = document.getElementById('fImpSheet').value;
+                targetSheet = sel === '__new__' ? document.getElementById('fImpNew').value.trim() : sel;
+                targetSheet = targetSheet.replace(/[:\\/?*\[\]]/g, "_").substring(0, 31);
+                if (!targetSheet) { alert('Zadejte název cílového listu.'); return; }
+            }
+
+            var startTime = performance.now();
+            AppLogger.info('🚀 Start importu: ' + queue.length + ' souborů.');
+
+            setBusy(true);
+            try {
+                if (mode === 'sheet') await runSheetImport(queue, targetSheet, startTime);
+                else await runDriveImport(queue);
+            } catch (err) {
+                showResult('Chyba importu', 'Proces byl přerušen:<br>' + esc(err.message), '❌');
+            } finally {
+                setBusy(false);
+                setProgress(0, '');
+            }
+        };
+
+        async function runSheetImport(queue, targetSheet, startTime) {
+            var overwrite = isOn('fImpClear');
+            var formatHeader = isOn('fImpHeader');
+            var skipEmptyRows = isOn('fImpSkipEmpty');
+            var trimEmptyCols = isOn('fImpTrimCols');
+            var totalRows = 0;
+            var nextStartRow = 1;
+
+            for (var i = 0; i < queue.length; i++) {
+                var slot = queue[i];
+                var file = slot.file;
+                var sourceSheetIdx = slot.sheetIdx || 0;
+
+                setLoading(true, 'Parsuji...', file.name);
+                var workbook = await readWorkbook(file);
+
+                // Použijeme uživatelem vybraný list
+                var sourceSheetName = workbook.SheetNames[sourceSheetIdx] || workbook.SheetNames[0];
+                var rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sourceSheetName], { header: 1, defval: "" });
+                setLoading(false);
+
+                // Filtrování prázdných řádků (volitelné přes toggle)
+                var data;
+                if (skipEmptyRows) {
+                    data = rawData.filter(function (row) {
+                        if (!row || row.length === 0) return false;
+                        return row.some(function (cell) {
+                            return cell !== "" && cell !== null && cell !== undefined;
+                        });
+                    });
+                } else {
+                    data = rawData;
+                }
+
+                if (!data || data.length === 0) continue;
+
+                var chunkSize = 5000;
+                var chunks = [];
+                for (var j = 0; j < data.length; j += chunkSize) {
+                    chunks.push(data.slice(j, j + chunkSize));
+                }
+
+                // 1. Sekvenční start (kvůli inicializaci listu na serveru)
+                var firstRaw = chunks.shift();
+                var firstClean = cleanData(firstRaw);
+                var res = await callServer('moduleImport_chunk', [JSON.stringify(firstClean), targetSheet, {
+                    isFirstChunk: (i === 0),
+                    overwrite: overwrite,
+                    formatHeader: formatHeader,
+                    startRow: (i === 0) ? undefined : nextStartRow,
+                    totalRows: data.length
+                }]);
+
+                if (!res.success) throw new Error(res.error);
+                nextStartRow = res.actualStartRow + firstClean.length;
+                totalRows += firstClean.length;
+
+                // 2. Bezpečná souběžnost (po 2 dávkách)
+                var workerLimit = 2;
+                for (var k = 0; k < chunks.length; k += workerLimit) {
+                    var batch = chunks.slice(k, k + workerLimit);
+                    var batchTasks = [];
+                    for (var b = 0; b < batch.length; b++) {
+                        var cData = cleanData(batch[b]);
+                        batchTasks.push({ data: cData, row: nextStartRow });
+                        nextStartRow += cData.length;
+                        totalRows += cData.length;
+                    }
+
+                    setProgress(Math.round(((k + 1) / chunks.length) * 100), 'Zápis: ' + file.name + ' (' + totalRows + '/' + data.length + ')');
+                    var results = await Promise.all(batchTasks.map(t => callServer('moduleImport_chunk', [JSON.stringify(t.data), targetSheet, { isFirstChunk: false, startRow: t.row }])));
+                    results.forEach(r => { if (!r.success) throw new Error(r.error); });
+                }
+            }
+
+            function cleanData(raw) {
+                var cleaned = [];
+                for (var r = 0; r < raw.length; r++) {
+                    var row = raw[r];
+                    if (!Array.isArray(row)) { cleaned.push([]); continue; }
+                    var cRow = [];
+                    for (var c = 0; c < row.length; c++) {
+                        var v = row[c];
+                        if (v && typeof v === 'object' && 'v' in v && !(v instanceof Date)) v = v.v;
+                        if (v === undefined || v === null) cRow.push("");
+                        else if (typeof v === 'string') {
+                            cRow.push((v.indexOf('\x00') !== -1 || v.length > 500) ? v.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim() : v);
+                        } else if (typeof v === 'number' || typeof v === 'boolean' || v instanceof Date) {
+                            cRow.push((typeof v === 'number' && !isFinite(v)) ? "" : v);
+                        } else {
+                            try { cRow.push(String(v).substring(0, 500)); } catch (e) { cRow.push(""); }
+                        }
+                    }
+                    cleaned.push(cRow);
+                }
+
+                // Ořez koncových prázdných sloupců (pokud je zapnutý toggle)
+                if (trimEmptyCols && cleaned.length > 0) {
+                    var maxCol = 0;
+                    for (var ri = 0; ri < cleaned.length; ri++) {
+                        for (var ci = cleaned[ri].length - 1; ci >= 0; ci--) {
+                            if (cleaned[ri][ci] !== "" && cleaned[ri][ci] !== null && cleaned[ri][ci] !== undefined) {
+                                if (ci + 1 > maxCol) maxCol = ci + 1;
+                                break;
+                            }
+                        }
+                    }
+                    if (maxCol > 0) {
+                        cleaned = cleaned.map(function (row) { return row.slice(0, maxCol); });
+                    }
+                }
+
+                return cleaned;
+            }
+
+            var endTime = performance.now();
+            var dSec = (endTime - startTime) / 1000;
+            var m = Math.floor(dSec / 60);
+            var s = Math.floor(dSec % 60);
+            var duration = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+            AppLogger.ok('🚀 Import dokončen za ' + duration + '.');
+
+            S._impSlots = [{}, {}, {}]; S._impNewSheetName = ''; render();
+
+            setTimeout(() => {
+                showResult('Import dokončen',
+                    '✅ Data nahrána do <strong>' + esc(targetSheet) + '</strong>.<br>' +
+                    'Celkem: <strong>' + totalRows + '</strong> řádků.<br>' +
+                    'Čas: <strong>' + duration + '</strong>', '✅');
+            }, 200);
+        }
+
+        async function runDriveImport(queue) {
+            var folderId = document.getElementById('fImpFolder').value.trim();
+            var prefix = document.getElementById('fImpPrefix').value.trim();
+            var count = 0;
+            for (var i = 0; i < queue.length; i++) {
+                setProgress(Math.round((i / queue.length) * 100), 'Nahrávám: ' + queue[i].name);
+                var dataUrl = await readFileAsDataURL(queue[i].file);
+                var res = await callServer('moduleImport_uploadToDrive', [{ data: dataUrl, name: queue[i].name }, { targetFolderId: folderId, prefix: prefix }]);
+                if (res.success) count++; else throw new Error(res.error);
+            }
+            S._impSlots = [{}, {}, {}]; render();
+            showResult('Nahrávání dokončeno', '✅ Celkem nahráno: <strong>' + count + '</strong> souborů.', '📁');
+        }
+
+        function readWorkbook(file) { return new Promise((resolve, reject) => { var r = new FileReader(); r.onload = e => { try { var d = new Uint8Array(e.target.result); resolve(XLSX.read(d, { type: 'array', cellDates: true })); } catch (ex) { reject(ex); } }; r.onerror = reject; r.readAsArrayBuffer(file); }); }
+        function readFileAsDataURL(file) { return new Promise((resolve, reject) => { var r = new FileReader(); r.onload = e => resolve(e.target.result); r.onerror = reject; r.readAsDataURL(file); }); }
+        function callServer(f, a) { return new Promise((resolve, reject) => { google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[f].apply(this, a); }); }
+        function render() { var m = document.getElementById('main'); if (S.mod === 'import') vImport(m); }
+    })();
+</script>

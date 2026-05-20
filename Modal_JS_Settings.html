@@ -1,0 +1,371 @@
+<script>
+    /* ═══════════════════════════════════════════
+       SETTINGS MODULE
+       ═══════════════════════════════════════════ */
+    function vSettings(m) {
+        m.innerHTML = '<div style="color:var(--t3);font-size:12px">Načítání...</div>';
+
+        google.script.run
+            .withSuccessHandler(function (d) {
+                var auto = d.autoFolderName || 'Kořen Drive';
+                var autoId = d.autoFolderId || '';
+                var ktId = d.ktFolderId || autoId;
+                var pdfId = d.pdfFolderId || autoId;
+                S.activeLcId = d.activeLcId || '';
+
+                var html = '';
+
+                // -- 4 sloupce: Název + KT složka + PDF složka + Temp složka --
+                html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0 10px">';
+
+                // Název aplikace
+                var currentName = d.appName || 'Vyhodnocení odpisů akčních artiklů';
+                html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px">' +
+                    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">' +
+                    '<span style="font-size:16px">&#9998;</span>' +
+                    '<span style="font-size:12px;font-weight:700;color:var(--t1)">Název aplikace</span>' +
+                    '</div>' +
+                    '<div style="font-size:10px;color:var(--t2);margin-bottom:6px">Přejmenuje aplikaci, tabulku i Apps Script projekt</div>' +
+                    '<div class="set-row" style="margin:0">' +
+                    '<input class="fg-input" type="text" id="sName" value="' + esc(currentName) + '" placeholder="Vyhodnocení odpisů akčních artiklů" style="font-size:12px;padding:4px 8px">' +
+                    '<button class="btn-valid" onclick="sNameSave(this)" style="font-size:10px;padding:4px 8px">Uložit</button>' +
+                    '</div>' +
+                    '<div style="font-size:9px;color:var(--t3);margin-top:6px">⚠ Název menu a Apps Script se aktualizují při příštím otevření tabulky</div>' +
+                    '</div>';
+
+                // KT složka
+                html += sBox(
+                    '📁', 'Složka pro KT soubory', 'Kam se uloží nové KT soubory',
+                    d.ktFolderId ? d.ktFolderName : auto,
+                    !!d.ktFolderId, ktId,
+                    'ktFolderId', 'sKT', d.ktFolderId || ''
+                );
+
+                // PDF složka
+                html += sBox(
+                    '📄', 'Složka pro PDF export', 'Kam se uloží generované PDF',
+                    d.pdfFolderId ? d.pdfFolderName : auto,
+                    !!d.pdfFolderId, pdfId,
+                    'pdfFolderId', 'sPDF', d.pdfFolderId || ''
+                );
+
+                // Temp složka
+                html += sBox(
+                    '☁️', 'Dočasná složka (Temp)', 'Pro dočasné soubory XLSX importu',
+                    d.tempFolderId ? d.tempFolderName : auto,
+                    !!d.tempFolderId, d.tempFolderId || autoId,
+                    'tempFolderId', 'sTemp', d.tempFolderId || ''
+                );
+
+                html += '</div>';
+
+                // ============= SEKCE LOGISTICKÁ CENTRA =============
+                html += '<div style="margin-top:16px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px">' +
+                    '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)">' +
+                    toggle('sShowLc', 'Zobrazit výchozí LC u loga', d.showLcInHeader) +
+                    '<div style="font-size:10px;color:var(--t2);margin-top:4px;margin-left:44px">V hlavičce aplikace se zobrazí vybrané LC nebo "bez výběru LC"</div>' +
+                    '</div>' +
+                    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+                    '<div style="display:flex;align-items:center;gap:8px">' +
+                    '<span style="font-size:18px">🏢</span>' +
+                    '<span style="font-size:14px;font-weight:700;color:var(--t1)">Logistická centra (LC)</span>' +
+                    '</div>' +
+                    '<div style="display:flex;gap:6px">' +
+                    '<button class="btn btn-s" onclick="lcClearActive()" style="font-size:11px;padding:4px 10px;color:var(--red);border-color:var(--red);' + (S.activeLcId ? '' : 'display:none;') + '" id="btnLcClearActive">✖ Zrušit aktivní</button>' +
+                    '<button class="btn btn-s" onclick="lcFormShow()" style="font-size:11px;padding:4px 10px">+ Přidat LC</button>' +
+                    '</div>' +
+                    '</div>' +
+                    '<div id="lcForm" class="hidden" style="margin-bottom:12px;padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">' +
+                    '<div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;margin-bottom:8px">' +
+                    '<input type="text" id="lcId" class="fg-input" placeholder="Číslo (01)" style="font-size:12px">' +
+                    '<input type="text" id="lcName" class="fg-input" placeholder="Název města (Brandýs)" style="font-size:12px">' +
+                    '<input type="text" id="lcAbbr" class="fg-input" placeholder="Zkratka (BDY)" style="font-size:12px">' +
+                    '</div>' +
+                    '<div style="display:flex;gap:6px">' +
+                    '<button class="btn btn-p" onclick="lcSave()" style="font-size:11px;padding:4px 12px">Uložit</button>' +
+                    '<button class="btn btn-s" onclick="lcFormHide()" style="font-size:11px;padding:4px 12px">Zrušit</button>' +
+                    '</div>' +
+                    '<div id="lcErr" style="color:var(--red);font-size:11px;margin-top:6px;display:none"></div>' +
+                    '</div>' +
+                    '<div id="lcListWrapper"><div style="color:var(--t3);font-size:11px">Načítám LC konfiguraci...</div></div>' +
+                    '</div>';
+                // ===================================================
+
+                // Výchozí složka info
+                html += '<div style="margin-top:10px;padding:8px 12px;background:#f0f4ff;border-radius:6px;border-left:3px solid var(--blue);display:flex;align-items:center;gap:8px">' +
+                    '<span style="font-size:14px">&#128193;</span>' +
+                    '<div style="font-size:10px;color:var(--t2);line-height:1.5">' +
+                    '<strong>Výchozí složka:</strong> ' + esc(auto) +
+                    '<span style="font-family:var(--mono);color:var(--t3);margin-left:6px">' + esc(autoId) + '</span>' +
+                    '</div></div>';
+
+                m.innerHTML = html;
+
+                // Load LC list asynchronously
+                google.script.run
+                    .withSuccessHandler(renderLCList)
+                    .withFailureHandler(function (e) { document.getElementById('lcListWrapper').innerHTML = '<div style="color:red;font-size:11px">Chyba: ' + esc(e.message) + '</div>'; })
+                    .moduleSettings_getLCList();
+
+                // Obsluha kliku na sShowLc toggle
+                var tglLc = document.getElementById('sShowLc');
+                if (tglLc) {
+                    tglLc.addEventListener('click', function () {
+                        var isNowOn = this.classList.contains('on');
+                        sSaveShowLc(isNowOn);
+                    });
+                }
+            })
+            .withFailureHandler(onErr)
+            .moduleSettings_getData();
+    }
+
+    function sBox(icon, title, desc, activeName, isCustom, activeId, key, inputId, val) {
+        var badge = isCustom
+            ? '<span style="color:var(--green);font-weight:600">&#10003; vlastní</span>'
+            : '<span style="color:var(--blue)">&#8644; auto</span>';
+
+        return '<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px">' +
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">' +
+            '<span style="font-size:16px">' + icon + '</span>' +
+            '<span style="font-size:12px;font-weight:700;color:var(--t1);flex:1">' + title + '</span>' +
+            '<span style="font-size:9px;padding:1px 6px;border-radius:3px;background:' + (isCustom ? '#dcfce7' : '#e0ecff') + '">' + badge + '</span>' +
+            '</div>' +
+            '<div style="font-size:10px;color:var(--t2);margin-bottom:4px">' + desc + '</div>' +
+            '<div style="font-size:11px;color:var(--t1);font-weight:500;margin-bottom:2px">' + esc(activeName) + '</div>' +
+            '<div style="font-family:var(--mono);font-size:9px;color:var(--t3);margin-bottom:6px;word-break:break-all;line-height:1.3">' + esc(activeId) + '</div>' +
+            '<div class="set-row" style="margin:0">' +
+            '<input class="fg-input" type="text" id="' + inputId + '" placeholder="URL nebo ponechte prázdné" value="' + esc(val) + '" style="font-size:11px;padding:4px 8px">' +
+            '<button class="btn-valid" onclick="sFolderSave(\'' + key + '\',\'' + inputId + '\',this)" style="font-size:10px;padding:4px 8px">Uložit</button>' +
+            '</div>' +
+            '</div>';
+    }
+
+    function sNameSave(btn) {
+        var val = document.getElementById('sName').value;
+        btn.textContent = '...';
+        btn.disabled = true;
+
+        google.script.run
+            .withSuccessHandler(function (r) {
+                btn.disabled = false;
+                if (r.success) {
+                    btn.textContent = '✓';
+                    btn.className = 'btn-valid ok';
+                    var appNameEl = document.getElementById('appname');
+                    if (appNameEl) appNameEl.textContent = val || 'Vyhodnocení odpisů akčních artiklů';
+                    setTimeout(function () { btn.textContent = 'Uložit'; btn.className = 'btn-valid'; }, 2000);
+                } else {
+                    btn.textContent = '✗';
+                    btn.className = 'btn-valid fail';
+                    setTimeout(function () { btn.textContent = 'Uložit'; btn.className = 'btn-valid'; }, 3000);
+                }
+            })
+            .withFailureHandler(function (e) {
+                btn.disabled = false;
+                btn.textContent = 'Uložit';
+                onErr(e);
+            })
+            .moduleSettings_saveName(val);
+    }
+
+    function sFolderSave(key, inputId, btn) {
+        var val = document.getElementById(inputId).value;
+        btn.textContent = '...';
+        btn.disabled = true;
+
+        google.script.run
+            .withSuccessHandler(function (r) {
+                btn.disabled = false;
+                if (r.success) {
+                    btn.textContent = '✓';
+                    btn.className = 'btn-valid ok';
+                    setTimeout(function () { go('settings'); }, 600);
+                } else {
+                    btn.textContent = '✗ ' + (r.error || 'Chyba');
+                    btn.className = 'btn-valid fail';
+                    setTimeout(function () { btn.textContent = 'Uložit'; btn.className = 'btn-valid'; }, 3000);
+                }
+            })
+            .withFailureHandler(function (e) {
+                btn.disabled = false;
+                btn.textContent = 'Uložit';
+                onErr(e);
+            })
+            .moduleSettings_saveFolder(key, val);
+    }
+
+    function sSaveShowLc(show) {
+        google.script.run
+            .withSuccessHandler(function (r) {
+                if (r.success) {
+                    S.showLcInHeader = show;
+                    var lcEl = document.getElementById('lcname');
+                    if (lcEl) {
+                        lcEl.style.display = show ? 'block' : 'none';
+                    }
+                } else {
+                    alert('Chyba uložení: ' + r.error);
+                }
+            })
+            .withFailureHandler(function (e) { alert('Chyba: ' + e.message); })
+            .moduleSettings_saveShowLc(show);
+    }
+
+    /* ═══════════════════════════════════════════
+       LC MANAGEMENT
+       ═══════════════════════════════════════════ */
+    S.lcDataCache = [];
+
+    function renderLCList(lcs) {
+        S.lcDataCache = lcs || [];
+        var wrap = document.getElementById('lcListWrapper');
+        if (!wrap) return;
+
+        if (S.lcDataCache.length === 0) {
+            wrap.innerHTML = '<div style="padding:16px;text-align:center;color:var(--t3);font-size:12px;background:#f9fafb;border-radius:6px;border:1px dashed var(--border)">Zatím nejsou přidána žádná LC</div>';
+            return;
+        }
+
+        var html = '<table class="grid-table" style="width:100%;font-size:12px;border-collapse:collapse">' +
+            '<thead><tr style="border-bottom:2px solid var(--border);text-align:left;color:var(--t2)">' +
+            '<th style="padding:6px 4px;width:60px;text-align:center">Aktivní</th>' +
+            '<th style="padding:6px 4px;width:60px">Číslo</th>' +
+            '<th style="padding:6px 4px">Název</th>' +
+            '<th style="padding:6px 4px;width:80px">Zkratka</th>' +
+            '<th style="padding:6px 4px;width:60px;text-align:right">Akce</th>' +
+            '</tr></thead><tbody>';
+
+        S.lcDataCache.forEach(function (lc) {
+            var isChecked = (S.activeLcId && String(lc.id) === String(S.activeLcId)) ? 'checked' : '';
+            html += '<tr style="border-bottom:1px solid var(--border)">' +
+                '<td style="padding:6px 4px;text-align:center"><input type="radio" name="activeLC" value="' + esc(lc.id) + '" onchange="lcSetActive(\'' + esc(lc.id) + '\')" ' + isChecked + '></td>' +
+                '<td style="padding:6px 4px;font-weight:600;color:var(--t1)">' + esc(lc.id) + '</td>' +
+                '<td style="padding:6px 4px">' + esc(lc.name) + '</td>' +
+                '<td style="padding:6px 4px;font-family:var(--mono);color:var(--t2)">' + esc(lc.abbr) + '</td>' +
+                '<td style="padding:6px 4px;text-align:right">' +
+                '<span style="cursor:pointer;color:var(--blue);margin-right:8px" onclick="lcFormEdit(\'' + esc(lc.id) + '\')">&#9998;</span>' +
+                '<span style="cursor:pointer;color:var(--red)" onclick="lcDelete(\'' + esc(lc.id) + '\')">✖</span>' +
+                '</td></tr>';
+        });
+
+        html += '</tbody></table>';
+        wrap.innerHTML = html;
+        var btnClr = document.getElementById('btnLcClearActive');
+        if (btnClr) btnClr.style.display = S.activeLcId ? 'inline-block' : 'none';
+    }
+
+    function lcFormShow() {
+        document.getElementById('lcForm').classList.remove('hidden');
+        document.getElementById('lcId').focus();
+    }
+
+    function lcFormHide() {
+        document.getElementById('lcForm').classList.add('hidden');
+        document.getElementById('lcId').value = '';
+        document.getElementById('lcName').value = '';
+        document.getElementById('lcAbbr').value = '';
+        document.getElementById('lcErr').style.display = 'none';
+    }
+
+    function lcFormEdit(id) {
+        var lc = S.lcDataCache.find(function (item) { return item.id === id; });
+        if (lc) {
+            document.getElementById('lcId').value = lc.id;
+            document.getElementById('lcName').value = lc.name;
+            document.getElementById('lcAbbr').value = lc.abbr;
+            lcFormShow();
+        }
+    }
+
+    function lcSave() {
+        var id = document.getElementById('lcId').value.trim();
+        var name = document.getElementById('lcName').value.trim();
+        var abbr = document.getElementById('lcAbbr').value.trim();
+        var errEl = document.getElementById('lcErr');
+
+        if (!id || !name) {
+            errEl.textContent = 'Vyplňte číslo a název LC';
+            errEl.style.display = 'block';
+            return;
+        }
+
+        errEl.style.display = 'none';
+        setBusy(true);
+
+        google.script.run
+            .withSuccessHandler(function (r) {
+                setBusy(false);
+                if (r.success) {
+                    lcFormHide();
+                    renderLCList(r.lcs);
+                } else {
+                    errEl.textContent = 'Chyba: ' + (r.error || 'Neznámá chyba');
+                    errEl.style.display = 'block';
+                }
+            })
+            .withFailureHandler(function (e) { setBusy(false); onErr(e); })
+            .moduleSettings_saveLC(id, name, abbr);
+    }
+
+    function lcDelete(id) {
+        if (!confirm('Opravdu chcete smazat LC ' + id + '?')) return;
+        setBusy(true);
+
+        google.script.run
+            .withSuccessHandler(function (r) {
+                setBusy(false);
+                if (r.success) {
+                    renderLCList(r.lcs);
+                } else {
+                    alert('Chyba mazání: ' + (r.error || 'Neznámá chyba'));
+                }
+            })
+            .withFailureHandler(function (e) { setBusy(false); onErr(e); })
+            .moduleSettings_deleteLC(id);
+    }
+
+    function lcSetActive(id) {
+        S.activeLcId = id;
+        var btnClr = document.getElementById('btnLcClearActive');
+        if (btnClr) btnClr.style.display = 'inline-block';
+
+        var wrap = document.getElementById('lcListWrapper');
+        if (wrap) wrap.style.opacity = '0.5';
+
+        google.script.run
+            .withSuccessHandler(function (r) {
+                if (wrap) wrap.style.opacity = '1';
+                if (r.success) {
+                    renderLCList(S.lcDataCache);
+                    var lcObj = S.lcDataCache.find(function (item) { return item.id === id; });
+                    var lcEl = document.getElementById('lcname');
+                    if (lcEl && lcObj && S.showLcInHeader) lcEl.textContent = "LC " + lcObj.name;
+                } else {
+                    alert('Chyba při aktualizaci aktivního LC: ' + r.error);
+                }
+            })
+            .withFailureHandler(function (e) { if (wrap) wrap.style.opacity = '1'; onErr(e); })
+            .moduleSettings_setActiveLC(id);
+    }
+
+    function lcClearActive() {
+        var wrap = document.getElementById('lcListWrapper');
+        if (wrap) wrap.style.opacity = '0.5';
+
+        google.script.run
+            .withSuccessHandler(function (r) {
+                if (wrap) wrap.style.opacity = '1';
+                if (r.success) {
+                    S.activeLcId = '';
+                    renderLCList(S.lcDataCache);
+                    var lcEl = document.getElementById('lcname');
+                    if (lcEl && S.showLcInHeader) lcEl.textContent = "bez výběru LC";
+                } else {
+                    alert('Chyba mazání aktivního LC: ' + r.error);
+                }
+            })
+            .withFailureHandler(function (e) { if (wrap) wrap.style.opacity = '1'; onErr(e); })
+            .moduleSettings_clearActiveLC();
+    }
+</script>

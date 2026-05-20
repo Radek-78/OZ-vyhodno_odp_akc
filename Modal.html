@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="cs">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- CSS Styles -->
+  <?!= include('Modal_CSS'); ?>
+</head>
+
+<body>
+  <div id="app">
+    <script>
+      window.APP_CONFIG = {
+        initialModule: '<?= initialModule ?>'
+      };
+    </script>
+
+    <!-- ═══ HEADER LEFT ═══ -->
+    <div class="hl">
+      <?!= include('Modal_Logo'); ?>
+      <div class="hl-info">
+        <div class="hl-row">
+          <div class="hl-appname" id="appname">Vyhodnocení odpisů akčních artiklů</div>
+          <div class="hl-ver" id="ver">...</div>
+        </div>
+        <div class="hl-row">
+          <div class="hl-lcname" id="lcname" style="display:none">bez výběru LC</div>
+          <div class="hl-email" id="email">načítání...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ HEADER RIGHT ═══ -->
+    <div class="hr">
+      <div class="hr-icon" id="hIcon">🏠</div>
+      <div class="hr-txt">
+        <div class="hr-title" id="hTitle">Řídicí panel</div>
+        <div class="hr-sub" id="hSub">Vyberte modul</div>
+      </div>
+      <button class="hr-back" id="hMin" onclick="toggleMinimize()">_ Sbalit</button>
+      <button class="hr-back" id="hBack" onclick="go('home')">← Přehled</button>
+    </div>
+
+    <!-- ═══ LOG PANEL ═══ -->
+    <div class="lp">
+      <div class="lp-label">Systémový log</div>
+      <div id="logbox">
+        <div class="ll">
+          <span class="ll-t">[--:--:--]</span>
+          <span class="ll-m dim">Připojování k serveru...<span class="cursor"></span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ MAIN PANEL ═══ -->
+    <div id="main"></div>
+
+    <!-- ═══ FOOTER LEFT ═══ -->
+    <div class="fl">
+      <div class="fl-dot ready" id="sDot"></div>
+      <div class="fl-txt" id="sTxt">Připraveno</div>
+    </div>
+
+    <!-- ═══ FOOTER RIGHT ═══ -->
+    <div class="fr">
+      <div class="fr-prog">
+        <div class="fr-prog-top">
+          <span id="pLabel">—</span>
+          <span id="pPct"></span>
+        </div>
+        <div class="fr-bar">
+          <div class="fr-fill" id="pBar"></div>
+        </div>
+      </div>
+      <div class="fr-btns" id="fBtns"></div>
+    </div>
+
+  </div>
+
+  <!-- Result Modal (Success/Error) -->
+  <div id="resModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-hd" id="resModalHd">
+        <div class="modal-icon" id="resModalIcon">✅</div>
+        <div class="modal-title" id="resModalTitle">Hotovo</div>
+      </div>
+      <div class="modal-body" id="resModalBody">
+        Operace byla úspěšně dokončena.
+      </div>
+      <div class="modal-ft">
+        <button class="btn-modal" onclick="closeResModal()">Rozumím</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preloader overlay -->
+  <div id="loader" class="loader-overlay">
+    <div class="loader-content">
+      <div class="loader-spinner"></div>
+      <div id="loaderText" class="loader-text">Inicializace systému...</div>
+      <div id="loaderSub" class="loader-subtext">Prosím čekejte</div>
+    </div>
+  </div>
+
+  <!-- Google API for Picker -->
+  <script src="https://apis.google.com/js/api.js"></script>
+
+  <!-- SheetJS for Client-Side Excel/CSV Parsing -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+  <!-- JavaScript Components -->
+  <?!= include('Modal_JS_Utils'); ?>
+  <?!= include('Modal_JS_Main'); ?>
+  <?!= include('Modal_JS_KT'); ?>
+  <?!= include('Modal_JS_Import'); ?>
+  <?!= include('Modal_JS_PDF'); ?>
+  <?!= include('Modal_JS_Settings'); ?>
+  <?!= include('Modal_JS_Misc'); ?>
+
+</body>
+
+</html>
