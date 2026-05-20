@@ -29,7 +29,7 @@ const ModuleKT = {
       var week = dateInfo.week;
       var year = dateInfo.year;
       var useSubfolders = (params.useSubfolders === true || params.useSubfolders === 'true');
-      var fileName = 'KT_' + String(week).padStart(2, '0') + '_' + dateInfo.dayName + '_' + year;
+      var fileName = year + '_KT' + String(week).padStart(2, '0') + '_' + dateInfo.dayName;
 
       AppLogger.info('Týden: KT ' + String(week).padStart(2, '0') + ' / ' + year);
       AppLogger.info('Datum akce: ' + dateInfo.displayDate + ' (' + dateInfo.dayName + ')');

@@ -109,7 +109,7 @@
         }
 
         function ktFileName(info) {
-            return 'KT_' + String(info.week).padStart(2, '0') + '_' + info.dayName + '_' + info.year;
+            return info.year + '_KT' + String(info.week).padStart(2, '0') + '_' + info.dayName;
         }
 
         function ktUpdPreview() {
