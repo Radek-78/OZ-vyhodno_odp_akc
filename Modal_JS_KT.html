@@ -3,7 +3,7 @@
        KT MODULE
        ═══════════════════════════════════════════ */
     function vKT(m) {
-        var pref = S.data.ktPref || { actionDate: '', useSubfolders: false, targetFolderId: '' };
+        var pref = S.data.ktPref || { actionDate: '', targetFolderId: '' };
         var today = new Date();
         var defaultDate = pref.actionDate || today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
 
@@ -63,10 +63,7 @@
             '<input class="fg-input" type="text" id="fKtFolder" placeholder="Vložte URL nebo ID složky z Google Drive" value="' + esc(pref.targetFolderId) + '" style="font-size:11px;margin-top:8px">' +
             '</div>' +
             '<div class="kt-folder-foot">' +
-            '<label class="cbox" style="margin:0">' +
-            '<input type="checkbox" id="fKtSub"' + (pref.useSubfolders ? ' checked' : '') + '>' +
-            '<span>Vytvořit podsložky <strong>rok / KTxx</strong></span>' +
-            '</label>' +
+            '<div class="fg-hint">Soubor se vždy vytvoří v podsložkách <strong>rok / KTxx</strong>.</div>' +
             '<div class="kt-path-preview" id="ktPathPrev" style="display:none"></div>' +
             '</div>' +
             '</div>' +
@@ -81,7 +78,6 @@
         }
 
         var dateEl = document.getElementById('fKtDate');
-        var subEl = document.getElementById('fKtSub');
 
         function ktDateInfo() {
             var raw = dateEl.value;
@@ -132,10 +128,8 @@
         }
 
         function ktUpdPath() {
-            var sub = subEl.checked;
             var pathEl = document.getElementById('ktPathPrev');
             if (!pathEl) return;
-            if (!sub) { pathEl.style.display = 'none'; return; }
             var info = ktDateInfo();
             if (!info) { pathEl.style.display = 'none'; return; }
             pathEl.style.display = 'flex';
@@ -150,7 +144,6 @@
 
         dateEl.addEventListener('change', ktUpdPreview);
         dateEl.addEventListener('input', ktUpdPreview);
-        subEl.addEventListener('change', ktUpdPath);
 
         document.querySelectorAll('input[name="ktFolder"]').forEach(function (r) {
             r.addEventListener('change', function () {
@@ -267,7 +260,6 @@
 
         if (!info) { alert('Vyberte platné datum akce.'); return; }
 
-        var useSub = document.getElementById('fKtSub').checked;
         var folderRadio = document.querySelector('input[name="ktFolder"]:checked');
         var folderMode = folderRadio ? folderRadio.value : 'auto';
         var folderId = '';
@@ -294,7 +286,7 @@
             .moduleKT_create({
                 actionDate: actionDate,
                 targetFolderId: folderId,
-                useSubfolders: useSub
+                useSubfolders: true
             });
     }
 </script>

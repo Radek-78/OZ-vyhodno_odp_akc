@@ -17,7 +17,6 @@ const ModuleKT = {
    * @param {Object} params
    * @param {string} params.actionDate - datum akce ve formátu yyyy-MM-dd
    * @param {string} [params.targetFolderId] - URL nebo ID cílové složky (prázdné = auto)
-   * @param {boolean} [params.useSubfolders] - true = vytvořit rok/KTxx podsložky
    * @returns {{ success: boolean, fileId?: string, fileName?: string, url?: string, error?: string }}
    */
   create(params) {
@@ -28,7 +27,7 @@ const ModuleKT = {
       var dateInfo = ModuleKT.getDateInfo_(params.actionDate);
       var week = dateInfo.week;
       var year = dateInfo.year;
-      var useSubfolders = (params.useSubfolders === true || params.useSubfolders === 'true');
+      var useSubfolders = true;
       var fileName = year + '_KT' + String(week).padStart(2, '0') + '_' + dateInfo.dayName;
 
       AppLogger.info('Týden: KT ' + String(week).padStart(2, '0') + ' / ' + year);
@@ -238,7 +237,6 @@ const ModuleKT = {
     try {
       // Dávkový zápis — 1 čtení + 1 zápis místo 4 × (čtení + zápis)
       const updates = {};
-      if (params.useSubfolders !== undefined) updates['ktUseSubfolders'] = params.useSubfolders ? '1' : '0';
       if (params.targetFolderId !== undefined) updates['ktTargetFolderId'] = params.targetFolderId || '';
       if (params.actionDate !== undefined) updates['ktActionDate'] = params.actionDate || '';
       if (Object.keys(updates).length > 0) AppConfig.setMultiple(updates);
@@ -253,18 +251,9 @@ const ModuleKT = {
    * @returns {Object}
    */
   getPreferences() {
-    var subVal = AppConfig.get('ktUseSubfolders');
-    // Default = true (zaškrtnuto) — pokud klíč neexistuje (null), default je true
-    // Sheets může konvertovat '1' na číslo 1, proto porovnáváme přes String()
-    var useSub;
-    if (subVal === null || subVal === undefined || subVal === '') {
-      useSub = true; // default
-    } else {
-      useSub = (String(subVal) === '1' || subVal === true);
-    }
     return {
       actionDate: AppConfig.get('ktActionDate') || '',
-      useSubfolders: useSub,
+      useSubfolders: true,
       targetFolderId: AppConfig.get('ktTargetFolderId') || ''
     };
   },
