@@ -8,13 +8,13 @@
 const ModuleManagerColoring = {
   SHEET_NAMES: ['BNL', 'OLO', 'CER', 'BUS', 'BRV'],
   START_ROW: 10,
-  MANAGER_COL: 3,
+  MANAGER_COL: 4,
   LAST_ROW_MARKER_COL: 2,
   STRIPE_COLOR: '#D9E1F2',
   CLEAR_COLOR: '#ffffff',
 
   /**
-   * Obarví řádky na definovaných listech podle po sobě jdoucích manažerů.
+   * Obarví řádky na definovaných listech podle po sobě jdoucích skupin manažerů.
    * První skupina manažera zůstane bez barvy, další skupina dostane STRIPE_COLOR.
    * @returns {{success: boolean, results: Array<{sheet: string, rows: number, lastRow?: number, message?: string}>}}
    */
@@ -43,14 +43,14 @@ const ModuleManagerColoring = {
         .map(row => String(row[0] || '').trim());
 
       const backgrounds = [];
-      let previousManager = null;
+      let previousManager = '';
       let useStripe = false;
 
       managers.forEach(manager => {
-        if (previousManager !== null && manager !== previousManager) {
+        if (manager && previousManager && manager !== previousManager) {
           useStripe = !useStripe;
         }
-        previousManager = manager;
+        if (manager) previousManager = manager;
 
         const color = useStripe ? ModuleManagerColoring.STRIPE_COLOR : ModuleManagerColoring.CLEAR_COLOR;
         backgrounds.push(Array(lastCol).fill(color));
@@ -112,8 +112,8 @@ function runManagerRowColoring() {
       return r.sheet + ': ' + r.message;
     });
 
-    SpreadsheetApp.getActiveSpreadsheet().toast('Obarvení řádků dokončeno', 'Hotovo', 5);
-    ui.alert('Obarvení podle manažerů', lines.join('\n'), ui.ButtonSet.OK);
+    SpreadsheetApp.getActiveSpreadsheet().toast('Obarvení skupin RM dokončeno', 'Hotovo', 5);
+    ui.alert('Obarvení skupin RM', lines.join('\n'), ui.ButtonSet.OK);
   } catch (e) {
     ui.alert('Chyba obarvení', e.message, ui.ButtonSet.OK);
   }
