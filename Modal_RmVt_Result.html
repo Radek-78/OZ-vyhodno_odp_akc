@@ -127,7 +127,7 @@
           <div class="hl-appname">Vyhodnocení odpisů akčních artiklů</div>
         </div>
         <div class="hl-row">
-          <div class="hl-email">Výsledky RM+VT</div>
+          <div class="hl-email" id="email">načítání...</div>
         </div>
       </div>
     </div>
@@ -186,6 +186,29 @@
     }
 
     function init() {
+      google.script.run
+        .withSuccessHandler(function (d) {
+          document.getElementById('email').textContent = (d && d.userEmail) || '';
+        })
+        .withFailureHandler(function () {
+          document.getElementById('email').textContent = '';
+        })
+        .ui_getInitialData();
+
+      google.script.run
+        .withSuccessHandler(function (chunks) {
+          if (chunks && chunks.length > 0) {
+            var logoImg = document.getElementById('logo');
+            var logoPlaceholder = document.getElementById('logo-placeholder');
+            if (logoImg) {
+              logoImg.src = chunks.join('');
+              logoImg.style.display = 'block';
+              if (logoPlaceholder) logoPlaceholder.style.display = 'none';
+            }
+          }
+        })
+        .ui_getLogoChunks();
+
       google.script.run
         .withSuccessHandler(renderResult)
         .withFailureHandler(function (e) {

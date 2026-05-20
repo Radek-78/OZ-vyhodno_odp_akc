@@ -10,6 +10,7 @@ const ModuleRmVt = {
   RESULT_CACHE_KEY: 'rmVtLastResult',
   LOCAL_SHEET_NAME: 'Filiálky',
   SOURCE_SHEET_NAME: 'Filiálky',
+  MAX_BRANCH_ID_EXCLUSIVE: 900,
   SUPPORTED_MIME_TYPES: [
     MimeType.GOOGLE_SHEETS,
     MimeType.MICROSOFT_EXCEL,
@@ -133,6 +134,7 @@ const ModuleRmVt = {
     for (let r = 1; r < values.length; r++) {
       const branchId = ModuleRmVt.normalizeBranchId_(values[r][0]);
       if (!branchId) continue;
+      if (ModuleRmVt.shouldIgnoreBranch_(branchId)) continue;
 
       const lc = ModuleRmVt.clean_(values[r][4]);
       rowsByBranch[branchId] = {
@@ -159,6 +161,7 @@ const ModuleRmVt = {
     for (let r = 1; r < values.length; r++) {
       const branchId = ModuleRmVt.normalizeBranchId_(values[r][0]);
       if (!branchId) continue;
+      if (ModuleRmVt.shouldIgnoreBranch_(branchId)) continue;
 
       const lc = ModuleRmVt.clean_(values[r][2]);
       rowsByBranch[branchId] = {
@@ -269,6 +272,11 @@ const ModuleRmVt = {
     const s = String(value || '').trim();
     if (!s) return '';
     return s.replace(/\.0$/, '');
+  },
+
+  shouldIgnoreBranch_(branchId) {
+    const num = Number(branchId);
+    return isFinite(num) && num >= ModuleRmVt.MAX_BRANCH_ID_EXCLUSIVE;
   },
 
   clean_(value) {

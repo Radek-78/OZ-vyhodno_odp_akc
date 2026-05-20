@@ -12,11 +12,9 @@
     }
 
     .rmvt-wrap {
-      display: grid;
-      grid-template-columns: minmax(360px, 520px) 1fr;
-      gap: 14px;
+      max-width: 760px;
       height: 100%;
-      min-height: 0;
+      margin: 0 auto;
     }
 
     .rmvt-card {
@@ -38,14 +36,6 @@
       flex-direction: column;
       gap: 10px;
       min-height: 0;
-    }
-
-    .rmvt-progress-card {
-      overflow: auto;
-      min-height: 0;
-      font-size: 12px;
-      color: var(--t1);
-      line-height: 1.45;
     }
 
     .rmvt-kpis {
@@ -134,7 +124,7 @@
           <div class="hl-appname">Vyhodnocení odpisů akčních artiklů</div>
         </div>
         <div class="hl-row">
-          <div class="hl-email" id="statusLine">Aktualizace RM+VT</div>
+          <div class="hl-email" id="email">načítání...</div>
         </div>
       </div>
     </div>
@@ -177,10 +167,6 @@
           </div>
         </div>
 
-        <div class="rmvt-card rmvt-progress-card" id="progressBox">
-          <div class="rmvt-card-title">Průběh aktualizace</div>
-          <div class="rmvt-empty">Výsledky se po dokončení otevřou v samostatném okně.</div>
-        </div>
       </div>
     </div>
 
@@ -227,8 +213,13 @@
       document.getElementById('sDot').className = v ? 'fl-dot proc' : 'fl-dot ready';
       document.getElementById('sTxt').textContent = v ? 'Zpracování...' : 'Připraveno';
       document.getElementById('saveBtn').disabled = v;
-      document.getElementById('runBtn').disabled = v;
+      updateRunButton(v);
       setProgress(pct || 0, label || '');
+    }
+
+    function updateRunButton(forceDisabled) {
+      var folderId = document.getElementById('folderId').value.trim();
+      document.getElementById('runBtn').disabled = !!forceDisabled || !folderId;
     }
 
     function setProgress(pct, label) {
@@ -240,14 +231,40 @@
     }
 
     function init() {
+      document.getElementById('runBtn').disabled = true;
+      document.getElementById('folderId').addEventListener('input', function () { updateRunButton(false); });
       log('Načítám uloženou konfiguraci...');
       google.script.run
         .withSuccessHandler(function (cfg) {
           document.getElementById('folderId').value = (cfg && cfg.folderId) || '';
           log('Konfigurace načtena.', 'ok');
+          updateRunButton(false);
         })
         .withFailureHandler(showError)
         .moduleRmVt_getConfig();
+
+      google.script.run
+        .withSuccessHandler(function (d) {
+          document.getElementById('email').textContent = (d && d.userEmail) || '';
+        })
+        .withFailureHandler(function () {
+          document.getElementById('email').textContent = '';
+        })
+        .ui_getInitialData();
+
+      google.script.run
+        .withSuccessHandler(function (chunks) {
+          if (chunks && chunks.length > 0) {
+            var logoImg = document.getElementById('logo');
+            var logoPlaceholder = document.getElementById('logo-placeholder');
+            if (logoImg) {
+              logoImg.src = chunks.join('');
+              logoImg.style.display = 'block';
+              if (logoPlaceholder) logoPlaceholder.style.display = 'none';
+            }
+          }
+        })
+        .ui_getLogoChunks();
     }
 
     function saveFolder() {
@@ -258,6 +275,7 @@
           setBusy(false, '', 0);
           document.getElementById('folderId').value = r.folderId;
           log('Složka uložena: ' + r.folderName, 'ok');
+          updateRunButton(false);
         })
         .withFailureHandler(showError)
         .moduleRmVt_saveFolder(folderId);
@@ -265,14 +283,13 @@
 
     function runUpdate() {
       var folderId = document.getElementById('folderId').value.trim();
-      document.getElementById('progressBox').innerHTML = '<div class="rmvt-card-title">Průběh aktualizace</div><div class="rmvt-empty">Probíhá porovnání, aktualizace a obarvení. Výsledek se otevře v samostatném okně.</div>';
+      if (!folderId) return;
       setBusy(true, 'Porovnávám data...', 35);
       log('Spouštím aktualizaci RM+VT...');
 
       google.script.run
         .withSuccessHandler(function (r) {
           setBusy(false, 'Hotovo', 100);
-          document.getElementById('progressBox').innerHTML = '<div class="rmvt-card-title">Dokončeno</div><div class="rmvt-empty">Aktualizace dokončena. Výsledky byly otevřeny v samostatném okně.</div>';
           log('Aktualizace dokončena.', 'ok');
           setTimeout(function () { setProgress(0, ''); }, 1000);
         })
@@ -286,7 +303,6 @@
       document.getElementById('sTxt').textContent = 'Chyba';
       var msg = e && e.message ? e.message : String(e);
       log(msg, 'error');
-      document.getElementById('progressBox').innerHTML = '<div class="rmvt-card-title">Chyba</div><div class="rmvt-empty" style="color:var(--red)">' + esc(msg) + '</div>';
     }
 
     document.addEventListener('DOMContentLoaded', init);
