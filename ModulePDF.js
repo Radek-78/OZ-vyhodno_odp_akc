@@ -11,6 +11,109 @@
 const ModulePDF = {
 
   /**
+   * Vygeneruje samostatné PDF pro každý vybraný list.
+   * Listy exportuje po jednom, dočasně ponechá viditelný jen právě generovaný list.
+   *
+   * @param {string[]} sheetNames
+   * @param {Object} options
+   * @param {string} options.rangeId
+   * @param {string} options.size
+   * @param {boolean} options.portrait
+   * @param {boolean} options.gridlines
+   * @param {boolean} options.pageNumbers
+   * @returns {{success: boolean, count?: number, files?: Array, error?: string}}
+   */
+  exportSheets(sheetNames, options) {
+    AppLogger.info('Spouštím generování PDF pro ' + sheetNames.length + ' listů.');
+
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const folderResult = ModulePDF.resolveCurrentFileFolder_();
+      if (!folderResult.success) return { success: false, error: folderResult.error };
+      const folder = folderResult.folder;
+
+      const allSheets = ss.getSheets();
+      const originalHidden = {};
+      allSheets.forEach(sheet => originalHidden[sheet.getSheetId()] = sheet.isSheetHidden());
+
+      const originalActive = ss.getActiveSheet();
+      const selectedSheets = sheetNames
+        .map(name => ss.getSheetByName(name))
+        .filter(sheet => sheet);
+
+      if (selectedSheets.length === 0) {
+        return { success: false, error: 'Nebyl nalezen žádný vybraný list.' };
+      }
+
+      const token = ScriptApp.getOAuthToken();
+      const ssId = ss.getId();
+      const rangeId = (options.rangeId || 'B2:M10').trim();
+      const files = [];
+
+      try {
+        for (let i = 0; i < selectedSheets.length; i++) {
+          const sheet = selectedSheets[i];
+          AppLogger.info('[' + (i + 1) + '/' + selectedSheets.length + '] Generuji list ' + sheet.getName());
+
+          sheet.showSheet();
+          ss.setActiveSheet(sheet);
+          allSheets.forEach(other => {
+            if (other.getSheetId() !== sheet.getSheetId() && !other.isSheetHidden()) {
+              other.hideSheet();
+            }
+          });
+          SpreadsheetApp.flush();
+
+          const range = sheet.getRange(rangeId);
+          const r1 = range.getRow() - 1;
+          const c1 = range.getColumn() - 1;
+          const r2 = range.getLastRow();
+          const c2 = range.getLastColumn();
+
+          const urlOptions =
+            'exportFormat=pdf&format=pdf' +
+            '&size=' + (options.size === 'A3' ? 'A3' : 'A4') +
+            '&portrait=' + (options.portrait ? 'true' : 'false') +
+            '&fitw=true' +
+            '&horizontal_alignment=CENTER' +
+            '&vertical_alignment=TOP' +
+            '&gridlines=' + (options.gridlines ? 'true' : 'false') +
+            '&printtitle=false' +
+            '&sheetnames=false' +
+            '&pagenumbers=' + (options.pageNumbers ? 'true' : 'false') +
+            '&attachment=true' +
+            '&gid=' + sheet.getSheetId() +
+            '&r1=' + r1 + '&c1=' + c1 + '&r2=' + r2 + '&c2=' + c2;
+
+          const url = 'https://docs.google.com/spreadsheets/d/' + ssId + '/export?' + urlOptions;
+          const response = UrlFetchApp.fetch(url, {
+            headers: { Authorization: 'Bearer ' + token },
+            muteHttpExceptions: true
+          });
+
+          if (response.getResponseCode() !== 200) {
+            throw new Error('Generování listu "' + sheet.getName() + '" selhalo: ' + response.getContentText().substring(0, 200));
+          }
+
+          const fileName = ModulePDF.buildSheetPdfName_(ss.getName(), sheet.getName());
+          const file = folder.createFile(response.getBlob().setName(fileName));
+          files.push({ name: fileName, id: file.getId() });
+
+          Utilities.sleep(200);
+        }
+      } finally {
+        ModulePDF.restoreSheetVisibility_(ss, allSheets, originalHidden, originalActive);
+      }
+
+      AppLogger.ok('PDF generování dokončeno: ' + files.length + ' souborů.');
+      return { success: true, count: files.length, files: files };
+    } catch (e) {
+      AppLogger.error('Chyba PDF generování: ' + e.message);
+      return { success: false, error: e.message };
+    }
+  },
+
+  /**
    * Exportuje zadané listy do jednoho PDF a uloží jej na disk Google.
    *
    * @param {string[]} sheetNames - Pole názvů listů, které se mají exportovat.
@@ -257,6 +360,53 @@ const ModulePDF = {
     }
   },
 
+  resolveCurrentFileFolder_() {
+    const folderId = Utils.getBaseFolderId();
+    if (!folderId) {
+      return { success: false, error: 'Nelze určit složku aktuální tabulky.' };
+    }
+
+    try {
+      return { success: true, folder: DriveApp.getFolderById(folderId) };
+    } catch (e) {
+      return { success: false, error: 'Složka aktuální tabulky nebyla nalezena.' };
+    }
+  },
+
+  restoreSheetVisibility_(ss, allSheets, originalHidden, originalActive) {
+    try {
+      allSheets.forEach(sheet => sheet.showSheet());
+      SpreadsheetApp.flush();
+
+      allSheets.forEach(sheet => {
+        if (originalHidden[sheet.getSheetId()] && ss.getSheets().filter(s => !s.isSheetHidden()).length > 1) {
+          sheet.hideSheet();
+        }
+      });
+
+      if (originalActive && !originalActive.isSheetHidden()) {
+        ss.setActiveSheet(originalActive);
+      }
+      SpreadsheetApp.flush();
+    } catch (e) {
+      AppLogger.warn('Nepodařilo se plně obnovit viditelnost listů: ' + e.message);
+    }
+  },
+
+  buildSheetPdfName_(spreadsheetName, sheetName) {
+    const base = ModulePDF.sanitizeFileName_(spreadsheetName || 'Soubor');
+    const suffix = ModulePDF.sanitizeFileName_(sheetName || 'List');
+    return base + '_' + suffix + '.pdf';
+  },
+
+  sanitizeFileName_(name) {
+    return String(name)
+      .replace(/[\/\\:*?"<>|#%\{\}~&]/g, '-')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .substring(0, 180);
+  },
+
   /**
    * Dostupné listy pro export (bez skrytých a _prefixed)
    * @returns {Array<{name: string, rowCount: number, colCount: number}>}
@@ -351,7 +501,7 @@ const ModulePDF = {
       AppLogger.warn('List "Filiálky" nebyl nalezen.');
     }
 
-    let folderId = AppConfig.get('pdfFolderId') || '';
+    let folderId = Utils.getBaseFolderId() || '';
     let folderName = '';
     if (folderId) {
       try {
@@ -376,6 +526,10 @@ const ModulePDF = {
 
 function modulePDF_export(sheetNames, options) {
   return ModulePDF.export(sheetNames, options);
+}
+
+function modulePDF_exportSheets(sheetNames, options) {
+  return ModulePDF.exportSheets(sheetNames, options);
 }
 
 function modulePDF_exportBatch(branches, options) {
