@@ -65,6 +65,7 @@ const ModuleKT = {
       AppLogger.info('Nastavuji parametry...');
       var newSS = SpreadsheetApp.open(newFile);
       ModuleKT.writeActionDate_(newSS, dateInfo.displayDate);
+      ModuleKT.freezeKtHeaderValues_(newSS);
 
       // Pokud nový soubor má _Config list, nastavíme week/year
       var configSheet = newSS.getSheetByName('_Config');
@@ -162,6 +163,21 @@ const ModuleKT = {
       if (sheet) sheet.getRange('B8').setValue('Akce od ' + displayDate);
     });
     AppLogger.ok('Datum akce zapsáno do listů BNL/OLO/CER/BUS/BRV ✓');
+  },
+
+  /**
+   * Převede záhlaví KT listů na pevné hodnoty, ponechá sloučení i formát.
+   * @private
+   * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+   */
+  freezeKtHeaderValues_(ss) {
+    ['BNL', 'OLO', 'CER', 'BUS', 'BRV'].forEach(function (name) {
+      var sheet = ss.getSheetByName(name);
+      if (!sheet) return;
+      var range = sheet.getRange('C5:L6');
+      range.copyTo(range, { contentsOnly: true });
+    });
+    AppLogger.ok('Záhlaví C5:L6 převedeno na hodnoty ✓');
   },
 
   /**
