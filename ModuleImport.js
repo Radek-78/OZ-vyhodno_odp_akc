@@ -152,8 +152,8 @@ const ModuleImport = {
   /**
    * Rychlý import velkého XLSX/CSV souboru:
    * - soubor se nahraje jako dočasný Google Sheet
-   * - vybraný list se zkopíruje do aktivní tabulky
-   * - původní cílový list se nahradí novou kopií
+   * - hodnoty z vybraného listu se zapíšou do stávajícího cílového listu
+   * - cílový list se nemaže, aby zůstaly funkční vzorce navázané na jeho sheetId
    */
   importBySheetCopy(fileObj, targetSheetName, options) {
     const tempName = '_tmp_import_' + Date.now() + '_' + (fileObj.name || 'soubor');
@@ -180,31 +180,16 @@ const ModuleImport = {
 
       const requestedIndex = Math.max(0, Number(options && options.sourceSheetIndex) || 0);
       const sourceSheet = sourceSheets[requestedIndex] || sourceSheets[0];
-      const copiedSheet = sourceSheet.copyTo(ss);
-      const oldSheet = ss.getSheetByName(targetSheetName);
-      const oldTempName = targetSheetName + '_old_' + Date.now();
-
-      if (oldSheet) oldSheet.setName(oldTempName);
-      copiedSheet.setName(targetSheetName);
-      ss.setActiveSheet(copiedSheet);
-      if (oldSheet) ss.deleteSheet(oldSheet);
-      SpreadsheetApp.flush();
-
-      const importedSheet = ss.getSheetByName(targetSheetName);
-      if (!importedSheet) throw new Error('Nepodařilo se připravit cílový list: ' + targetSheetName);
-
-      let replacedDashCount = 0;
-      if (options && options.replaceDashWithZero) {
-        replacedDashCount = ModuleImport.replaceDashWithZero_(importedSheet);
-      }
+      const importedSheet = ModuleImport.getOrCreateTargetSheet_(ss, targetSheetName);
+      const result = ModuleImport.replaceSheetValuesFromSource_(sourceSheet, importedSheet, options);
 
       return {
         success: true,
         targetSheet: targetSheetName,
         sourceSheet: sourceSheet.getName(),
-        rows: importedSheet.getLastRow(),
-        columns: importedSheet.getLastColumn(),
-        replacedDashCount: replacedDashCount
+        rows: result.rows,
+        columns: result.columns,
+        replacedDashCount: result.replacedDashCount
       };
     } catch (e) {
       return { success: false, error: 'Rychlý import selhal: ' + e.message };
@@ -215,17 +200,58 @@ const ModuleImport = {
     }
   },
 
-  replaceDashWithZero_(sheet) {
-    const matches = sheet.createTextFinder('^\\s*--\\s*$').useRegularExpression(true).matchEntireCell(true).findAll();
-    if (!matches || matches.length === 0) return 0;
+  getOrCreateTargetSheet_(ss, sheetName) {
+    return ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
+  },
 
-    const batchSize = 500;
-    for (let i = 0; i < matches.length; i += batchSize) {
-      const a1Notations = matches.slice(i, i + batchSize).map(range => range.getA1Notation());
-      sheet.getRangeList(a1Notations).setValue(0);
+  replaceSheetValuesFromSource_(sourceSheet, targetSheet, options) {
+    const sourceRange = sourceSheet.getDataRange();
+    let values = sourceRange.getValues();
+    const numRows = values.length;
+    const numCols = values.reduce(function (max, row) {
+      return Math.max(max, row.length);
+    }, 0);
+
+    let replacedDashCount = 0;
+    if (options && options.replaceDashWithZero) {
+      values = values.map(function (row) {
+        return row.map(function (value) {
+          if (typeof value === 'string' && value.trim() === '--') {
+            replacedDashCount++;
+            return 0;
+          }
+          return value;
+        });
+      });
     }
 
-    return matches.length;
+    targetSheet.clear();
+    if (numRows === 0 || numCols === 0) {
+      SpreadsheetApp.flush();
+      return { rows: 0, columns: 0, replacedDashCount: replacedDashCount };
+    }
+
+    ModuleImport.ensureSheetSize_(targetSheet, numRows, numCols);
+
+    const batchSize = 10000;
+    for (let start = 0; start < numRows; start += batchSize) {
+      const batch = values.slice(start, start + batchSize).map(function (row) {
+        const normalized = row.slice(0, numCols);
+        while (normalized.length < numCols) normalized.push('');
+        return normalized;
+      });
+      targetSheet.getRange(start + 1, 1, batch.length, numCols).setValues(batch);
+    }
+
+    SpreadsheetApp.flush();
+    return { rows: numRows, columns: numCols, replacedDashCount: replacedDashCount };
+  },
+
+  ensureSheetSize_(sheet, numRows, numCols) {
+    const maxRows = sheet.getMaxRows();
+    const maxCols = sheet.getMaxColumns();
+    if (numRows > maxRows) sheet.insertRowsAfter(maxRows, numRows - maxRows);
+    if (numCols > maxCols) sheet.insertColumnsAfter(maxCols, numCols - maxCols);
   },
 
   openSpreadsheetWithRetry_(spreadsheetId) {
