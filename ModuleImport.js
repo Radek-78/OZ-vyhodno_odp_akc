@@ -162,59 +162,33 @@ const ModuleImport = {
     try {
       const ss = SpreadsheetApp.getActiveSpreadsheet();
       const blob = ModuleImport.base64ToBlob_(fileObj.data, fileObj.name);
-      const created = Drive.Files.create({
+      const tempFileResource = {
         name: tempName,
         mimeType: MimeType.GOOGLE_SHEETS
-      }, blob, {
+      };
+      const parentFolderId = ModuleImport.getActiveSpreadsheetParentFolderId_(ss.getId());
+      if (parentFolderId) tempFileResource.parents = [parentFolderId];
+
+      const created = Drive.Files.create(tempFileResource, blob, {
         fields: 'id,name'
       });
 
       tempFileId = created.id;
-      const sourceSpreadsheet = Sheets.Spreadsheets.get(tempFileId, { fields: 'sheets(properties(sheetId,title,index))' });
-      const sourceSheets = (sourceSpreadsheet && sourceSpreadsheet.sheets) || [];
+      const sourceSs = ModuleImport.openSpreadsheetWithRetry_(tempFileId);
+      const sourceSheets = sourceSs.getSheets();
       if (sourceSheets.length === 0) throw new Error('Dočasný soubor neobsahuje žádný list.');
 
       const requestedIndex = Math.max(0, Number(options && options.sourceSheetIndex) || 0);
-      const sourceProps = (sourceSheets[requestedIndex] || sourceSheets[0]).properties;
-      const copyResult = Sheets.Spreadsheets.Sheets.copyTo({
-        destinationSpreadsheetId: ss.getId()
-      }, tempFileId, sourceProps.sheetId);
-
-      const copiedSheetId = copyResult.sheetId;
+      const sourceSheet = sourceSheets[requestedIndex] || sourceSheets[0];
+      const copiedSheet = sourceSheet.copyTo(ss);
       const oldSheet = ss.getSheetByName(targetSheetName);
-      const requests = [];
+      const oldTempName = targetSheetName + '_old_' + Date.now();
 
-      if (oldSheet) {
-        requests.push({
-          updateSheetProperties: {
-            properties: {
-              sheetId: oldSheet.getSheetId(),
-              title: targetSheetName + '_old_' + Date.now()
-            },
-            fields: 'title'
-          }
-        });
-      }
-
-      requests.push({
-        updateSheetProperties: {
-          properties: {
-            sheetId: copiedSheetId,
-            title: targetSheetName
-          },
-          fields: 'title'
-        }
-      });
-
-      if (oldSheet) {
-        requests.push({
-          deleteSheet: {
-            sheetId: oldSheet.getSheetId()
-          }
-        });
-      }
-
-      Sheets.Spreadsheets.batchUpdate({ requests: requests }, ss.getId());
+      if (oldSheet) oldSheet.setName(oldTempName);
+      copiedSheet.setName(targetSheetName);
+      ss.setActiveSheet(copiedSheet);
+      if (oldSheet) ss.deleteSheet(oldSheet);
+      SpreadsheetApp.flush();
 
       const importedSheet = ss.getSheetByName(targetSheetName);
       if (!importedSheet) throw new Error('Nepodařilo se připravit cílový list: ' + targetSheetName);
@@ -227,7 +201,7 @@ const ModuleImport = {
       return {
         success: true,
         targetSheet: targetSheetName,
-        sourceSheet: sourceProps.title,
+        sourceSheet: sourceSheet.getName(),
         rows: importedSheet.getLastRow(),
         columns: importedSheet.getLastColumn(),
         replacedDashCount: replacedDashCount
@@ -252,6 +226,29 @@ const ModuleImport = {
     }
 
     return matches.length;
+  },
+
+  openSpreadsheetWithRetry_(spreadsheetId) {
+    let lastError = null;
+    for (let i = 0; i < 8; i++) {
+      try {
+        return SpreadsheetApp.openById(spreadsheetId);
+      } catch (e) {
+        lastError = e;
+        Utilities.sleep(750);
+      }
+    }
+    throw lastError || new Error('Dočasnou tabulku se nepodařilo otevřít.');
+  },
+
+  getActiveSpreadsheetParentFolderId_(spreadsheetId) {
+    try {
+      const parents = DriveApp.getFileById(spreadsheetId).getParents();
+      if (parents.hasNext()) return parents.next().getId();
+    } catch (e) {
+      AppLogger.warn('Nepodařilo se zjistit složku aktuální tabulky: ' + e.message);
+    }
+    return '';
   },
 
   base64ToBlob_(dataUrl, fileName) {
