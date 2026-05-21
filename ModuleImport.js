@@ -150,6 +150,35 @@ const ModuleImport = {
   },
 
   /**
+   * Vrátí seznam artiklů, které se mají ponechat při importu odpisů po artiklech.
+   * Zdroj: list "Akční artikly", sloupec B od řádku 3 dolů.
+   */
+  getActionArticleFilterValues() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('Akční artikly');
+    if (!sheet) return { success: false, error: 'List "Akční artikly" nebyl nalezen.' };
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 3) return { success: true, values: [] };
+
+    const values = sheet.getRange(3, 2, lastRow - 2, 1).getValues()
+      .map(row => ModuleImport.normalizeArticleKey_(row[0]))
+      .filter(value => value);
+
+    return {
+      success: true,
+      values: Array.from(new Set(values))
+    };
+  },
+
+  clearTargetSheet(sheetName) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ModuleImport.getOrCreateTargetSheet_(ss, sheetName);
+    sheet.clear();
+    return { success: true };
+  },
+
+  /**
    * Rychlý import velkého XLSX/CSV souboru:
    * - soubor se nahraje jako dočasný Google Sheet
    * - hodnoty z vybraného listu se zapíšou do stávajícího cílového listu
@@ -254,6 +283,12 @@ const ModuleImport = {
     if (numCols > maxCols) sheet.insertColumnsAfter(maxCols, numCols - maxCols);
   },
 
+  normalizeArticleKey_(value) {
+    if (value === null || value === undefined || value === '') return '';
+    if (typeof value === 'number') return String(Math.trunc(value));
+    return String(value).trim().replace(/\s+/g, '').replace(/\.0$/, '');
+  },
+
   openSpreadsheetWithRetry_(spreadsheetId) {
     let lastError = null;
     for (let i = 0; i < 8; i++) {
@@ -292,6 +327,14 @@ function moduleImport_chunk(data, sheetName, options) {
 
 function moduleImport_uploadToDrive(fileObj, options) {
   return ModuleImport.uploadToDrive(fileObj, options);
+}
+
+function moduleImport_getActionArticleFilterValues() {
+  return ModuleImport.getActionArticleFilterValues();
+}
+
+function moduleImport_clearTargetSheet(sheetName) {
+  return ModuleImport.clearTargetSheet(sheetName);
 }
 
 function moduleImport_fastSheetCopy(fileObj, sheetName, options) {

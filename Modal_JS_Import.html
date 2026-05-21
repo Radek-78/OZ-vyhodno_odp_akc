@@ -113,6 +113,13 @@
         background: #e5efff !important;
     }
 
+    .im-slot.disabled {
+        cursor: not-allowed;
+        opacity: .48;
+        filter: grayscale(.25);
+        pointer-events: none;
+    }
+
     /* File-type badge */
     .im-slot-badge {
         position: absolute;
@@ -417,6 +424,10 @@
             return S._impSlots[i].targetSheet || cfg.target || '';
         }
 
+        function imReady() {
+            return !!(S.initDone && S.uiReady && !S.initing && !S.busy);
+        }
+
         function renderTargetOptions(selected) {
             var sheets = S.data.sheets || [];
             var found = false;
@@ -434,6 +445,7 @@
 
         window.vImport = function (m) {
             var slots = S._impSlots;
+            var canUseImport = imReady();
             var html = '';
 
             // ── File slots ──
@@ -445,8 +457,8 @@
                 var extLabel = ext.toUpperCase();
 
                 html += '<div class="im-slot-wrap">';
-                html += '<div class="im-slot' + (s.name ? ' filled' : '') + statusCls + '" id="dz' + i + '" ' +
-                    'onclick="document.getElementById(\'fi' + i + '\').click()" ' +
+                html += '<div class="im-slot' + (s.name ? ' filled' : '') + statusCls + (canUseImport ? '' : ' disabled') + '" id="dz' + i + '" ' +
+                    'onclick="imPickFile(' + i + ')" ' +
                     'ondragover="imDrag(event, true, ' + i + ')" ' +
                     'ondragleave="imDrag(event, false, ' + i + ')" ' +
                     'ondrop="imDrop(event, ' + i + ')">';
@@ -467,12 +479,12 @@
                     html += '<div class="im-slot-link">Vybrat soubor</div>';
                 }
 
-                html += '<input type="file" id="fi' + i + '" accept=".xlsx,.csv" hidden onchange="imHandleFile(this,' + i + ')">';
+                html += '<input type="file" id="fi' + i + '" accept=".xlsx,.csv" hidden onchange="imHandleFile(this,' + i + ')"' + (canUseImport ? '' : ' disabled') + '>';
                 html += '</div>';
 
                 html += '<div class="im-target-card">' +
                     '<div class="im-target-title">Cíl</div>' +
-                    '<select class="im-target-select" onchange="imSetTargetSheet(' + i + ', this.value)">' +
+                    '<select class="im-target-select" onchange="imSetTargetSheet(' + i + ', this.value)"' + (canUseImport ? '' : ' disabled') + '>' +
                     renderTargetOptions(getSlotTarget(i)) +
                     '</select>' +
                     '</div>';
@@ -485,30 +497,40 @@
 
             var fBtns = document.getElementById('fBtns');
             if (fBtns) {
-                fBtns.innerHTML = '<button class="btn btn-p" onclick="execImport()">📥 Spustit import</button>' +
+                fBtns.innerHTML = '<button class="btn btn-p" onclick="execImport()" ' + (canUseImport ? '' : 'disabled') + '>📥 Spustit import</button>' +
                     '<button class="btn btn-s" onclick="go(\'home\')">Zrušit</button>';
             }
 
         };
 
+        window.imPickFile = function (i) {
+            if (!imReady()) return;
+            var input = document.getElementById('fi' + i);
+            if (input) input.click();
+        };
         window.imClearSlot = function (i) {
+            if (!imReady()) return;
             S._impSlots[i] = {};
             render();
         };
         window.imDrag = function (e, over, i) {
             e.preventDefault();
+            if (!imReady()) return;
             var el = document.getElementById('dz' + i);
             if (over) el.classList.add('drag'); else el.classList.remove('drag');
         };
         window.imDrop = function (e, i) {
             e.preventDefault();
+            if (!imReady()) return;
             document.getElementById('dz' + i).classList.remove('drag');
             if (e.dataTransfer.files && e.dataTransfer.files[0]) imProcessFile(e.dataTransfer.files[0], i);
         };
         window.imHandleFile = function (el, i) {
+            if (!imReady()) return;
             if (el.files && el.files[0]) imProcessFile(el.files[0], i);
         };
         window.imSetTargetSheet = function (slotIdx, sheetName) {
+            if (!imReady()) return;
             S._impSlots[slotIdx].targetSheet = sheetName;
         };
 
@@ -524,17 +546,10 @@
             render();
 
             try {
-                if (i === 2) {
-                    // Velký artiklový import běží server-side přes dočasný Google Sheet.
-                    // Tady soubor zbytečně neparsujeme, aby výběr velkého XLSX nezamrzal UI.
-                    S._impSlots[i].sheetNames = [];
-                    S._impSlots[i].sheetIdx = 0;
-                } else {
-                    // Rychlé načtení struktury workbooku pro získání listů
-                    var workbook = await readWorkbook(file);
-                    S._impSlots[i].sheetNames = workbook.SheetNames;
-                    S._impSlots[i].sheetIdx = 0;
-                }
+                // Rychlé načtení struktury workbooku pro získání listů
+                var workbook = await readWorkbook(file);
+                S._impSlots[i].sheetNames = workbook.SheetNames;
+                S._impSlots[i].sheetIdx = 0;
                 S._impSlots[i].status = 'ok';
             } catch (e) {
                 S._impSlots[i].status = 'ok'; // Fallback
@@ -589,29 +604,8 @@
                 var sourceSheetIdx = slot.sheetIdx || 0;
                 var replaceDashWithZero = queue[i].config.num === 2 || queue[i].config.num === 3;
                 var nextStartRow = 1;
-                var useFastSheetCopy = queue[i].config.num === 3;
-
-                if (useFastSheetCopy) {
-                    setLoading(true, 'Nahrávám a převádím...', file.name);
-                    setProgress(Math.round((i / queue.length) * 100), 'Rychlý import: ' + file.name + ' → ' + targetSheet);
-
-                    var payload = await fileToDataUrl(file);
-                    var fastRes = await callServer('moduleImport_fastSheetCopy', [{
-                        name: file.name,
-                        data: payload
-                    }, targetSheet, {
-                        sourceSheetIndex: sourceSheetIdx,
-                        replaceDashWithZero: replaceDashWithZero
-                    }]);
-
-                    setLoading(false);
-                    if (!fastRes.success) throw new Error(fastRes.error);
-
-                    importedTargets.push(targetSheet);
-                    totalRows += fastRes.rows || 0;
-                    setProgress(Math.round(((i + 1) / queue.length) * 100), 'Hotovo: ' + targetSheet);
-                    continue;
-                }
+                var filterByActionArticles = queue[i].config.num === 3;
+                var filterApplied = false;
 
                 setLoading(true, 'Parsuji...', file.name);
                 var workbook = await readWorkbook(file);
@@ -634,7 +628,35 @@
                     data = rawData;
                 }
 
-                if (!data || data.length === 0) continue;
+                if (filterByActionArticles) {
+                    filterApplied = true;
+                    setLoading(true, 'Filtruji artikly...', file.name);
+                    var filterRes = await callServer('moduleImport_getActionArticleFilterValues', []);
+                    if (!filterRes.success) {
+                        setLoading(false);
+                        throw new Error(filterRes.error);
+                    }
+
+                    var articleSet = {};
+                    (filterRes.values || []).forEach(function (value) {
+                        articleSet[value] = true;
+                    });
+                    var beforeFilterRows = data.length;
+                    data = data.filter(function (row) {
+                        return row && articleSet[normalizeArticleKey(row[2])] === true;
+                    });
+                    AppLogger.info('Filtr artiklů: ' + data.length + ' / ' + beforeFilterRows + ' řádků ponecháno.');
+                    setLoading(false);
+                }
+
+                if (!data || data.length === 0) {
+                    if (filterApplied) {
+                        var clearRes = await callServer('moduleImport_clearTargetSheet', [targetSheet]);
+                        if (!clearRes.success) throw new Error(clearRes.error);
+                        importedTargets.push(targetSheet);
+                    }
+                    continue;
+                }
                 importedTargets.push(targetSheet);
 
                 var chunkSize = 5000;
@@ -718,6 +740,12 @@
                 return cleaned;
             }
 
+            function normalizeArticleKey(value) {
+                if (value === null || value === undefined || value === '') return '';
+                if (typeof value === 'number') return String(Math.trunc(value));
+                return String(value).trim().replace(/\s+/g, '').replace(/\.0$/, '');
+            }
+
             var endTime = performance.now();
             var dSec = (endTime - startTime) / 1000;
             var m = Math.floor(dSec / 60);
@@ -753,14 +781,6 @@
                 r.onerror = reject;
                 if (/\.csv$/i.test(file.name)) r.readAsText(file, 'UTF-8');
                 else r.readAsArrayBuffer(file);
-            });
-        }
-        function fileToDataUrl(file) {
-            return new Promise((resolve, reject) => {
-                var r = new FileReader();
-                r.onload = e => resolve(e.target.result);
-                r.onerror = reject;
-                r.readAsDataURL(file);
             });
         }
         function callServer(f, a) { return new Promise((resolve, reject) => { google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[f].apply(this, a); }); }

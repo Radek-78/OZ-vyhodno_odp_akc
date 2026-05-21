@@ -7,6 +7,7 @@
         logIdx: 0,
         busy: false,
         initDone: false,
+        uiReady: false,
         data: {}
     };
 
@@ -164,7 +165,11 @@
         // Odblokovat UI přesně ve chvíli kdy klient přijme zprávu o připravenosti
         if (S.waitingForReady) {
             S.waitingForReady = false;
+            S.uiReady = true;
             document.getElementById('app').classList.remove('is-loading');
+            if (S.mod === 'import' && typeof vImport === 'function') {
+                vImport(document.getElementById('main'));
+            }
         }
 
         var box = document.getElementById('logbox');
@@ -346,6 +351,9 @@
         dot.className = v ? 'fl-dot proc' : 'fl-dot ready';
         txt.textContent = v ? 'Zpracování...' : 'Připraveno';
         document.querySelectorAll('.btn').forEach(function (b) { b.disabled = v; });
+        if (S.mod === 'import' && typeof vImport === 'function' && S.initDone) {
+            vImport(document.getElementById('main'));
+        }
     }
 
     /**
