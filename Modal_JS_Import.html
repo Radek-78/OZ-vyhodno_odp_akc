@@ -642,10 +642,11 @@
                         articleSet[value] = true;
                     });
                     var beforeFilterRows = data.length;
-                    data = data.filter(function (row) {
+                    data = data.filter(function (row, rowIdx) {
+                        if (rowIdx < 8) return true;
                         return row && articleSet[normalizeArticleKey(row[2])] === true;
                     });
-                    AppLogger.info('Filtr artiklů: ' + data.length + ' / ' + beforeFilterRows + ' řádků ponecháno.');
+                    AppLogger.info('Filtr artiklů: ' + data.length + ' / ' + beforeFilterRows + ' řádků ponecháno včetně 8 řádků hlavičky.');
                     setLoading(false);
                 }
 
