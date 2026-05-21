@@ -149,6 +149,111 @@ const ModuleImport = {
     }
   },
 
+  /**
+   * Rychlý import velkého XLSX/CSV souboru:
+   * - soubor se nahraje jako dočasný Google Sheet
+   * - vybraný list se zkopíruje do aktivní tabulky
+   * - původní cílový list se nahradí novou kopií
+   */
+  importBySheetCopy(fileObj, targetSheetName, options) {
+    const tempName = '_tmp_import_' + Date.now() + '_' + (fileObj.name || 'soubor');
+    let tempFileId = '';
+
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const blob = ModuleImport.base64ToBlob_(fileObj.data, fileObj.name);
+      const created = Drive.Files.create({
+        name: tempName,
+        mimeType: MimeType.GOOGLE_SHEETS
+      }, blob, {
+        fields: 'id,name'
+      });
+
+      tempFileId = created.id;
+      const sourceSpreadsheet = Sheets.Spreadsheets.get(tempFileId, { fields: 'sheets(properties(sheetId,title,index))' });
+      const sourceSheets = (sourceSpreadsheet && sourceSpreadsheet.sheets) || [];
+      if (sourceSheets.length === 0) throw new Error('Dočasný soubor neobsahuje žádný list.');
+
+      const requestedIndex = Math.max(0, Number(options && options.sourceSheetIndex) || 0);
+      const sourceProps = (sourceSheets[requestedIndex] || sourceSheets[0]).properties;
+      const copyResult = Sheets.Spreadsheets.Sheets.copyTo({
+        destinationSpreadsheetId: ss.getId()
+      }, tempFileId, sourceProps.sheetId);
+
+      const copiedSheetId = copyResult.sheetId;
+      const oldSheet = ss.getSheetByName(targetSheetName);
+      const requests = [];
+
+      if (oldSheet) {
+        requests.push({
+          updateSheetProperties: {
+            properties: {
+              sheetId: oldSheet.getSheetId(),
+              title: targetSheetName + '_old_' + Date.now()
+            },
+            fields: 'title'
+          }
+        });
+      }
+
+      requests.push({
+        updateSheetProperties: {
+          properties: {
+            sheetId: copiedSheetId,
+            title: targetSheetName
+          },
+          fields: 'title'
+        }
+      });
+
+      if (oldSheet) {
+        requests.push({
+          deleteSheet: {
+            sheetId: oldSheet.getSheetId()
+          }
+        });
+      }
+
+      Sheets.Spreadsheets.batchUpdate({ requests: requests }, ss.getId());
+
+      const importedSheet = ss.getSheetByName(targetSheetName);
+      if (!importedSheet) throw new Error('Nepodařilo se připravit cílový list: ' + targetSheetName);
+
+      let replacedDashCount = 0;
+      if (options && options.replaceDashWithZero) {
+        replacedDashCount = ModuleImport.replaceDashWithZero_(importedSheet);
+      }
+
+      return {
+        success: true,
+        targetSheet: targetSheetName,
+        sourceSheet: sourceProps.title,
+        rows: importedSheet.getLastRow(),
+        columns: importedSheet.getLastColumn(),
+        replacedDashCount: replacedDashCount
+      };
+    } catch (e) {
+      return { success: false, error: 'Rychlý import selhal: ' + e.message };
+    } finally {
+      if (tempFileId) {
+        try { DriveApp.getFileById(tempFileId).setTrashed(true); } catch (err) { }
+      }
+    }
+  },
+
+  replaceDashWithZero_(sheet) {
+    const matches = sheet.createTextFinder('^\\s*--\\s*$').useRegularExpression(true).matchEntireCell(true).findAll();
+    if (!matches || matches.length === 0) return 0;
+
+    const batchSize = 500;
+    for (let i = 0; i < matches.length; i += batchSize) {
+      const a1Notations = matches.slice(i, i + batchSize).map(range => range.getA1Notation());
+      sheet.getRangeList(a1Notations).setValue(0);
+    }
+
+    return matches.length;
+  },
+
   base64ToBlob_(dataUrl, fileName) {
     const parts = dataUrl.split(',');
     const mime = parts[0].match(/:(.*?);/)[1];
@@ -164,6 +269,10 @@ function moduleImport_chunk(data, sheetName, options) {
 
 function moduleImport_uploadToDrive(fileObj, options) {
   return ModuleImport.uploadToDrive(fileObj, options);
+}
+
+function moduleImport_fastSheetCopy(fileObj, sheetName, options) {
+  return ModuleImport.importBySheetCopy(fileObj, sheetName, options);
 }
 
 function moduleImport_runDrive(fileIds, options) {

@@ -524,10 +524,17 @@
             render();
 
             try {
-                // Rychlé načtení struktury workbooku pro získání listů
-                var workbook = await readWorkbook(file);
-                S._impSlots[i].sheetNames = workbook.SheetNames;
-                S._impSlots[i].sheetIdx = 0;
+                if (i === 2) {
+                    // Velký artiklový import běží server-side přes dočasný Google Sheet.
+                    // Tady soubor zbytečně neparsujeme, aby výběr velkého XLSX nezamrzal UI.
+                    S._impSlots[i].sheetNames = [];
+                    S._impSlots[i].sheetIdx = 0;
+                } else {
+                    // Rychlé načtení struktury workbooku pro získání listů
+                    var workbook = await readWorkbook(file);
+                    S._impSlots[i].sheetNames = workbook.SheetNames;
+                    S._impSlots[i].sheetIdx = 0;
+                }
                 S._impSlots[i].status = 'ok';
             } catch (e) {
                 S._impSlots[i].status = 'ok'; // Fallback
@@ -582,6 +589,29 @@
                 var sourceSheetIdx = slot.sheetIdx || 0;
                 var replaceDashWithZero = queue[i].config.num === 2 || queue[i].config.num === 3;
                 var nextStartRow = 1;
+                var useFastSheetCopy = queue[i].config.num === 3;
+
+                if (useFastSheetCopy) {
+                    setLoading(true, 'Nahrávám a převádím...', file.name);
+                    setProgress(Math.round((i / queue.length) * 100), 'Rychlý import: ' + file.name + ' → ' + targetSheet);
+
+                    var payload = await fileToDataUrl(file);
+                    var fastRes = await callServer('moduleImport_fastSheetCopy', [{
+                        name: file.name,
+                        data: payload
+                    }, targetSheet, {
+                        sourceSheetIndex: sourceSheetIdx,
+                        replaceDashWithZero: replaceDashWithZero
+                    }]);
+
+                    setLoading(false);
+                    if (!fastRes.success) throw new Error(fastRes.error);
+
+                    importedTargets.push(targetSheet);
+                    totalRows += fastRes.rows || 0;
+                    setProgress(Math.round(((i + 1) / queue.length) * 100), 'Hotovo: ' + targetSheet);
+                    continue;
+                }
 
                 setLoading(true, 'Parsuji...', file.name);
                 var workbook = await readWorkbook(file);
@@ -723,6 +753,14 @@
                 r.onerror = reject;
                 if (/\.csv$/i.test(file.name)) r.readAsText(file, 'UTF-8');
                 else r.readAsArrayBuffer(file);
+            });
+        }
+        function fileToDataUrl(file) {
+            return new Promise((resolve, reject) => {
+                var r = new FileReader();
+                r.onload = e => resolve(e.target.result);
+                r.onerror = reject;
+                r.readAsDataURL(file);
             });
         }
         function callServer(f, a) { return new Promise((resolve, reject) => { google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[f].apply(this, a); }); }
