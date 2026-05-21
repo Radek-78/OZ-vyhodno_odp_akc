@@ -34,7 +34,14 @@ const ModulePDF = {
 
       const allSheets = ss.getSheets();
       const originalHidden = {};
-      allSheets.forEach(sheet => originalHidden[sheet.getSheetId()] = sheet.isSheetHidden());
+      const originalFrozen = {};
+      allSheets.forEach(sheet => {
+        originalHidden[sheet.getSheetId()] = sheet.isSheetHidden();
+        originalFrozen[sheet.getSheetId()] = {
+          rows: sheet.getFrozenRows(),
+          columns: sheet.getFrozenColumns()
+        };
+      });
 
       const originalActive = ss.getActiveSheet();
       const selectedSheets = sheetNames
@@ -57,6 +64,8 @@ const ModulePDF = {
 
           sheet.showSheet();
           ss.setActiveSheet(sheet);
+          sheet.setFrozenRows(0);
+          sheet.setFrozenColumns(0);
           allSheets.forEach(other => {
             if (other.getSheetId() !== sheet.getSheetId() && !other.isSheetHidden()) {
               other.hideSheet();
@@ -102,7 +111,7 @@ const ModulePDF = {
           Utilities.sleep(200);
         }
       } finally {
-        ModulePDF.restoreSheetVisibility_(ss, allSheets, originalHidden, originalActive);
+        ModulePDF.restoreSheetState_(ss, allSheets, originalHidden, originalFrozen, originalActive);
       }
 
       AppLogger.ok('PDF generování dokončeno: ' + files.length + ' souborů.');
@@ -373,9 +382,18 @@ const ModulePDF = {
     }
   },
 
-  restoreSheetVisibility_(ss, allSheets, originalHidden, originalActive) {
+  restoreSheetState_(ss, allSheets, originalHidden, originalFrozen, originalActive) {
     try {
       allSheets.forEach(sheet => sheet.showSheet());
+      SpreadsheetApp.flush();
+
+      allSheets.forEach(sheet => {
+        const frozen = originalFrozen[sheet.getSheetId()];
+        if (frozen) {
+          sheet.setFrozenRows(frozen.rows || 0);
+          sheet.setFrozenColumns(frozen.columns || 0);
+        }
+      });
       SpreadsheetApp.flush();
 
       allSheets.forEach(sheet => {
