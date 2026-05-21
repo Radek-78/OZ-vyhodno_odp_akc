@@ -1750,6 +1750,48 @@
         padding: 2px 0;
     }
 
+    .pdf-sheets-compact {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+    }
+
+    .pdf-sheet-section {
+        display: grid;
+        grid-template-columns: 86px 1fr;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .pdf-sheet-section-label {
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: .7px;
+        text-transform: uppercase;
+        color: var(--t3);
+        white-space: nowrap;
+    }
+
+    .pdf-sheets-row {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 6px 12px;
+        min-width: 0;
+    }
+
+    .pdf-sheet-cbox {
+        margin-bottom: 0;
+        min-width: 0;
+    }
+
+    .pdf-sheet-cbox span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 11px;
+    }
+
     .pdf-count-row {
         display: flex;
         align-items: center;

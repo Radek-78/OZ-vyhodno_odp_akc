@@ -25,16 +25,11 @@
         var orientation = settings.orientation || 'portrait';
         var gridlines = !!settings.gridlines;
         var pageNumbers = !!settings.pageNumbers;
-        var defaultCount = 0;
-
-        var cbs = sheets.map(function (sheet) {
-            var checked = pdfShouldSelectSheet(sheet);
-            if (checked) defaultCount++;
-            return '<label class="cbox">' +
-                '<input type="checkbox" class="sCb" value="' + esc(sheet) + '"' + (checked ? ' checked' : '') + '>' +
-                '<span>' + esc(sheet) + '</span>' +
-                '</label>';
-        }).join('');
+        var defaultSheets = sheets.filter(pdfShouldSelectSheet);
+        var otherSheets = sheets.filter(function (sheet) { return !pdfShouldSelectSheet(sheet); });
+        var defaultCount = defaultSheets.length;
+        var defaultCbs = defaultSheets.map(function (sheet) { return pdfSheetCheckbox(sheet, true); }).join('');
+        var otherCbs = otherSheets.map(function (sheet) { return pdfSheetCheckbox(sheet, false); }).join('');
 
         var folderName = d.targetFolderName || 'Složka aktuálního souboru';
 
@@ -57,7 +52,16 @@
             '<a href="#" onclick="pdfSelAllStd(false);return false">Odznačit vše</a>' +
             '</div>' +
             '</div>' +
-            '<div class="pdf-sheets-grid" onchange="pdfUpdateSheetCount()">' + cbs + '</div>' +
+            '<div class="pdf-sheets-compact" onchange="pdfUpdateSheetCount()">' +
+            '<div class="pdf-sheet-section pdf-sheet-section-lc">' +
+            '<div class="pdf-sheet-section-label">LC listy</div>' +
+            '<div class="pdf-sheets-row">' + defaultCbs + '</div>' +
+            '</div>' +
+            '<div class="pdf-sheet-section pdf-sheet-section-other">' +
+            '<div class="pdf-sheet-section-label">Ostatní listy</div>' +
+            '<div class="pdf-sheets-row">' + otherCbs + '</div>' +
+            '</div>' +
+            '</div>' +
             '</div></div>' +
 
             '<div class="pdf-batch-bottom">' +
@@ -106,6 +110,13 @@
         if (name === 'Filiálky') return false;
         if (lower.indexOf('odpisy') !== -1) return false;
         return true;
+    }
+
+    function pdfSheetCheckbox(sheet, checked) {
+        return '<label class="cbox pdf-sheet-cbox">' +
+            '<input type="checkbox" class="sCb" value="' + esc(sheet) + '"' + (checked ? ' checked' : '') + '>' +
+            '<span>' + esc(sheet) + '</span>' +
+            '</label>';
     }
 
     function pdfUpdateSheetCount() {
