@@ -515,8 +515,31 @@ const ModulePDF = {
       branches: branches,
       targetFolderId: folderId,
       targetFolderName: folderName,
+      settings: ModulePDF.getSettings_(),
       activeLcId: AppConfig.get('activeLcId') || ''
     };
+  },
+
+  getSettings_() {
+    return {
+      rangeId: AppConfig.get('pdfRangeId') || 'B2:M10',
+      size: AppConfig.get('pdfSize') || 'A4',
+      orientation: AppConfig.get('pdfOrientation') || 'portrait',
+      gridlines: String(AppConfig.get('pdfGridlines') || '') === 'true',
+      pageNumbers: String(AppConfig.get('pdfPageNumbers') || '') === 'true'
+    };
+  },
+
+  saveSettings(options) {
+    options = options || {};
+    AppConfig.setMultiple({
+      pdfRangeId: options.rangeId || 'B2:M10',
+      pdfSize: options.size === 'A3' ? 'A3' : 'A4',
+      pdfOrientation: options.orientation === 'landscape' ? 'landscape' : 'portrait',
+      pdfGridlines: options.gridlines ? 'true' : 'false',
+      pdfPageNumbers: options.pageNumbers ? 'true' : 'false'
+    });
+    return { success: true, settings: ModulePDF.getSettings_() };
   }
 
 };
@@ -544,3 +567,6 @@ function modulePDF_getInitData() {
   return ModulePDF.getInitData();
 }
 
+function modulePDF_saveSettings(options) {
+  return ModulePDF.saveSettings(options);
+}

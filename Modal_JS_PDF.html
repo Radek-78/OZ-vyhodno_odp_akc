@@ -19,6 +19,12 @@
     function renderPdfUi(m) {
         var d = S.pdfData;
         var sheets = d.sheets || [];
+        var settings = d.settings || {};
+        var rangeId = settings.rangeId || 'B2:M10';
+        var size = settings.size || 'A4';
+        var orientation = settings.orientation || 'portrait';
+        var gridlines = !!settings.gridlines;
+        var pageNumbers = !!settings.pageNumbers;
         var defaultCount = 0;
 
         var cbs = sheets.map(function (sheet) {
@@ -61,12 +67,12 @@
             '<div class="pdf-card-body">' +
             '<div class="kt-sec-lbl">Nastavení tisku</div>' +
             '<div class="pdf-two-col">' +
-            '<div class="fg"><div class="fg-label">Velikost papíru</div><select id="fPdfSize" class="fg-select"><option value="A4" selected>A4</option><option value="A3">A3</option></select></div>' +
-            '<div class="fg"><div class="fg-label">Orientace</div><select id="fPdfOr" class="fg-select"><option value="portrait" selected>Na výšku</option><option value="landscape">Na šířku</option></select></div>' +
+            '<div class="fg"><div class="fg-label">Velikost papíru</div><select id="fPdfSize" class="fg-select"><option value="A4"' + (size === 'A4' ? ' selected' : '') + '>A4</option><option value="A3"' + (size === 'A3' ? ' selected' : '') + '>A3</option></select></div>' +
+            '<div class="fg"><div class="fg-label">Orientace</div><select id="fPdfOr" class="fg-select"><option value="portrait"' + (orientation !== 'landscape' ? ' selected' : '') + '>Na výšku</option><option value="landscape"' + (orientation === 'landscape' ? ' selected' : '') + '>Na šířku</option></select></div>' +
             '</div>' +
             '<div style="display:flex;gap:20px;margin-top:10px">' +
-            toggle('fPGrid', 'Zobrazit mřížku', false) +
-            toggle('fPNum', 'Čísla stránek', false) +
+            toggle('fPGrid', 'Zobrazit mřížku', gridlines) +
+            toggle('fPNum', 'Čísla stránek', pageNumbers) +
             '</div>' +
             '</div></div>' +
 
@@ -75,7 +81,7 @@
             '<div class="pdf-card-body">' +
             '<div class="kt-sec-lbl">Rozsah a cíl</div>' +
             '<div class="pdf-two-col">' +
-            '<div class="fg"><div class="fg-label">Rozsah generování</div><input type="text" id="fPdfRange" class="fg-input" value="B2:M10"></div>' +
+            '<div class="fg"><div class="fg-label">Rozsah generování</div><input type="text" id="fPdfRange" class="fg-input" value="' + esc(rangeId) + '"></div>' +
             '<div class="fg"><div class="fg-label">Cílová složka</div><div class="pdf-folder-info"><span>📂</span><strong>' + esc(folderName) + '</strong></div></div>' +
             '</div>' +
             '</div></div>' +
@@ -87,6 +93,7 @@
         var fBtns = document.getElementById('fBtns');
         if (fBtns) {
             fBtns.innerHTML = '<button class="btn btn-p" onclick="execPDFSheets()">Generovat PDF</button>' +
+                '<button class="btn btn-s" onclick="savePDFSettings()">Uložit nastavení</button>' +
                 '<button class="btn btn-s" onclick="go(\'home\')">Zrušit</button>';
         }
     }
@@ -125,13 +132,7 @@
         document.querySelectorAll('.sCb:checked').forEach(function (c) { names.push(c.value); });
         if (names.length === 0) { alert('Vyberte alespoň jeden list.'); return; }
 
-        var opts = {
-            rangeId: document.getElementById('fPdfRange').value.trim() || 'B2:M10',
-            size: document.getElementById('fPdfSize').value,
-            portrait: document.getElementById('fPdfOr').value === 'portrait',
-            gridlines: isOn('fPGrid'),
-            pageNumbers: isOn('fPNum')
-        };
+        var opts = getPDFSettingsFromUi();
 
         setBusy(true);
         setProgress(5, 'Generuji PDF...');
@@ -150,5 +151,40 @@
             })
             .withFailureHandler(function (e) { setBusy(false); setProgress(0, ''); onErr(e); })
             .modulePDF_exportSheets(names, opts);
+    }
+
+    function getPDFSettingsFromUi() {
+        return {
+            rangeId: document.getElementById('fPdfRange').value.trim() || 'B2:M10',
+            size: document.getElementById('fPdfSize').value,
+            orientation: document.getElementById('fPdfOr').value,
+            portrait: document.getElementById('fPdfOr').value === 'portrait',
+            gridlines: isOn('fPGrid'),
+            pageNumbers: isOn('fPNum')
+        };
+    }
+
+    function savePDFSettings() {
+        if (S.busy) return;
+        var opts = getPDFSettingsFromUi();
+
+        setBusy(true);
+        setProgress(20, 'Ukládám nastavení PDF...');
+
+        google.script.run
+            .withSuccessHandler(function (r) {
+                setBusy(false);
+                if (r.success) {
+                    setProgress(100, 'Nastavení uloženo');
+                    S.pdfData.settings = r.settings || opts;
+                    showResult('Nastavení uloženo', '✅ PDF nastavení bylo uloženo do listu <strong>_Config</strong>.', '✅');
+                    setTimeout(function () { setProgress(0, ''); }, 1800);
+                } else {
+                    setProgress(0, '');
+                    showResult('Chyba uložení', 'Nastavení se nepodařilo uložit:<br>' + esc(r.error), '❌');
+                }
+            })
+            .withFailureHandler(function (e) { setBusy(false); setProgress(0, ''); onErr(e); })
+            .modulePDF_saveSettings(opts);
     }
 </script>
