@@ -41,6 +41,8 @@ const ModuleManagerColoring = {
 
       const rowCount = lastRow - ModuleManagerColoring.START_ROW + 1;
       const colorColCount = ModuleManagerColoring.COLOR_END_COL - ModuleManagerColoring.COLOR_START_COL + 1;
+      ModuleManagerColoring.sortBranchRows_(sheet, rowCount);
+
       const managers = sheet
         .getRange(ModuleManagerColoring.START_ROW, ModuleManagerColoring.MANAGER_COL, rowCount, 1)
         .getDisplayValues()
@@ -156,6 +158,27 @@ const ModuleManagerColoring = {
     flush();
 
     return hidden;
+  },
+
+  /**
+   * Seřadí datovou oblast podle RM (sloupec D) a následně podle čísla filiálky (sloupec B).
+   * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+   * @param {number} rowCount
+   */
+  sortBranchRows_(sheet, rowCount) {
+    if (rowCount <= 1) return;
+
+    const sortRange = sheet.getRange(
+      ModuleManagerColoring.START_ROW,
+      ModuleManagerColoring.COLOR_START_COL,
+      rowCount,
+      ModuleManagerColoring.COLOR_END_COL - ModuleManagerColoring.COLOR_START_COL + 1
+    );
+
+    sortRange.sort([
+      { column: ModuleManagerColoring.MANAGER_COL, ascending: true },
+      { column: ModuleManagerColoring.LAST_ROW_MARKER_COL, ascending: true }
+    ]);
   },
 
   /**
